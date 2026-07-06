@@ -9,12 +9,13 @@ type Writer struct {
 	wt *bufio.Writer
 }
 
-func NewWriter(w io.Writer) Writer {
-	return Writer{
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{
 		wt: bufio.NewWriterSize(w, DefaultBufferSize),
 	}
 }
 
+// This should encapsulate the right writing. It should only have WriteString
 func (w Writer) WriteType(reply byte) error {
 	return w.wt.WriteByte(reply)
 }

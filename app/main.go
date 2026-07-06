@@ -16,7 +16,7 @@ import (
 var logger logging.Logger
 
 type ConnectionRequest struct {
-	writer  resp.Writer
+	writer  *resp.Writer
 	command commands.Command
 }
 
