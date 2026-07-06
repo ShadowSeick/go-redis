@@ -107,7 +107,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 	if int(size) != n {
 		return "", errors.New("the actual string was shorter than expected")
 	}
-	fmt.Println("HELLO")
+	fmt.Println("result")
 	fmt.Println(string(str))
 
 	return string(str), nil
@@ -121,6 +121,7 @@ func (r *Reader) readArray(line []byte) ([]any, error) {
 
 	values := make([]any, size)
 	for i := range size {
+		fmt.Printf("array position %d", i)
 		v, err := r.ReadReply()
 		if err != nil {
 			return nil, err
