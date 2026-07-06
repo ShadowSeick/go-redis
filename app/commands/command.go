@@ -2,6 +2,8 @@ package commands
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -73,6 +75,7 @@ func (e *Echo) SetArgs(args ...any) {
 		case rune:
 			builder.WriteRune(t)
 		default:
+			fmt.Println(reflect.TypeOf(t))
 			panic("no other type is accepted")
 		}
 	}
