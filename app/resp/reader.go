@@ -87,6 +87,7 @@ func (r *Reader) readLine() ([]byte, error) {
 	if line[len(line)-1] != '\n' && line[len(line)-2] != '\r' {
 		return nil, ErrNotValid
 	}
+	fmt.Println(string(line))
 
 	return line[:len(line)-2], nil
 }
@@ -129,8 +130,6 @@ func (r *Reader) readArray(line []byte) ([]any, error) {
 }
 
 func readLen(line []byte) (int, error) {
-	fmt.Println(string(line))
-	fmt.Println(len(line))
 	n, err := strconv.Atoi(string(line[1:]))
 	if err != nil {
 		return 0, err
