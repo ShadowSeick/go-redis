@@ -104,7 +104,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	if int(size) != n {
+	if int(size)+len(carrierReturn) != n {
 		fmt.Println("SIZE")
 		fmt.Println(size)
 		fmt.Println("Actual read")
