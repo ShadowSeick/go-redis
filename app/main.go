@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
@@ -127,14 +128,16 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 
 					switch v := reply.(type) {
 					case string: // simple command
-						command, err := commands.New(v)
+						cmd := strings.ToLower(v)
+						command, err := commands.New(cmd)
 						if err != nil {
 							logger.Error("error parsing string", err)
 							return
 						}
 						connReq.command = command
 					case []string: // Multiple command. I need a better way of doing this
-						command, err := commands.New(v[0])
+						cmd := strings.ToLower(v[0])
+						command, err := commands.New(cmd)
 						if err != nil {
 							logger.Error("error parsing array string", err)
 							return

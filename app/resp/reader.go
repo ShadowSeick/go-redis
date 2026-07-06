@@ -62,8 +62,6 @@ func (r *Reader) ReadReply() (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("result")
-	fmt.Println(string(line))
 
 	switch line[0] {
 	case RespTypeStatus:
@@ -98,7 +96,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	str := make([]byte, size)
+	str := make([]byte, size+2)
 	n, err := io.ReadFull(r.rd, str)
 	if err != nil && err != io.EOF {
 		return "", err
@@ -108,7 +106,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", errors.New("the actual string was shorter than expected")
 	}
 
-	return string(str), nil
+	return string(str[:len(str)-2]), nil
 }
 
 func (r *Reader) readArray(line []byte) ([]any, error) {
