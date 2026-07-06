@@ -96,7 +96,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	str := make([]byte, size+2)
+	str := make([]byte, size)
 	n, err := io.ReadFull(r.rd, str)
 	if err != nil && err != io.EOF {
 		return "", err
@@ -106,7 +106,10 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", errors.New("the actual string was shorter than expected")
 	}
 
-	return string(str[:len(str)-2]), nil
+	// We discard the Carrier return \r\n at the end of the string
+	r.Discard(2)
+
+	return string(str), nil
 }
 
 func (r *Reader) readArray(line []byte) ([]any, error) {
