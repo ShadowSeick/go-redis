@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -146,7 +147,7 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						command.SetArgs(v[1:])
 						connReq.command = command
 					default:
-						fmt.Printf("type %v", v)
+						fmt.Printf("type %v", reflect.TypeOf(v))
 						logger.Info("type not expected", v)
 						panic("type not expected")
 					}

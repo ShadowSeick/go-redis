@@ -3,7 +3,6 @@ package resp
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
 )
@@ -87,7 +86,6 @@ func (r *Reader) readLine() ([]byte, error) {
 	if line[len(line)-1] != '\n' && line[len(line)-2] != '\r' {
 		return nil, ErrNotValid
 	}
-	fmt.Println(string(line))
 
 	return line[:len(line)-len(carrierReturn)], nil
 }
@@ -105,11 +103,6 @@ func (r *Reader) readString(line []byte) (string, error) {
 	}
 
 	if int(size)+len(carrierReturn) != n {
-		fmt.Println("SIZE")
-		fmt.Println(size)
-		fmt.Println("Actual read")
-		fmt.Println(n)
-		fmt.Println(string(str))
 		return "", errors.New("the actual string was shorter than expected")
 	}
 
