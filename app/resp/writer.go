@@ -35,3 +35,7 @@ func (w Writer) crlf() error {
 
 	return nil
 }
+
+func (w Writer) Flush() error {
+	return w.wt.Flush()
+}

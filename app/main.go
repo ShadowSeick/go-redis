@@ -73,9 +73,12 @@ func main() {
 				if err := data.writer.WriteReply(res); err != nil {
 					logger.Error("error writing to connection 3", err)
 				}
+
 			default:
 				logger.Warn("command not implemented", data.command.String())
 			}
+
+			data.writer.Flush()
 		}
 	}
 }
