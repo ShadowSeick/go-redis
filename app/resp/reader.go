@@ -82,7 +82,6 @@ func (r *Reader) readLine() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(string(line))
 
 	// I know it's valid when the \r\n is valid one
 	if line[len(line)-1] != '\n' && line[len(line)-2] != '\r' {
@@ -103,13 +102,10 @@ func (r *Reader) readString(line []byte) (string, error) {
 	if err != nil && err != io.EOF {
 		return "", err
 	}
-	fmt.Printf("%d bytes copied", n)
 
 	if int(size) != n {
 		return "", errors.New("the actual string was shorter than expected")
 	}
-	fmt.Println("result")
-	fmt.Println(string(str))
 
 	return string(str), nil
 }
@@ -122,7 +118,6 @@ func (r *Reader) readArray(line []byte) ([]any, error) {
 
 	values := make([]any, size)
 	for i := range size {
-		fmt.Printf("array position %d", i)
 		v, err := r.ReadReply()
 		if err != nil {
 			return nil, err
@@ -134,6 +129,8 @@ func (r *Reader) readArray(line []byte) ([]any, error) {
 }
 
 func readLen(line []byte) (int, error) {
+	fmt.Println(string(line))
+	fmt.Println(len(line))
 	n, err := strconv.Atoi(string(line[1:]))
 	if err != nil {
 		return 0, err
