@@ -138,22 +138,20 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						}
 						connReq.command = command
 					case []any: // Multiple command. I need a better way of doing this
-						vals := make([]string, len(v))
-						for i, s := range v {
-							switch t := s.(type) {
-							case string:
-								vals[i] = t
-							default:
-								panic("type not expected")
-							}
+						var cmd string
+						switch t := v[0].(type) {
+						case string:
+							cmd = strings.ToLower(t)
+						default:
+							panic("type not expected")
 						}
-						cmd := strings.ToLower(vals[0])
+
 						command, err := commands.New(cmd)
 						if err != nil {
 							logger.Error("error parsing array string", err)
 							return
 						}
-						command.SetArgs(vals[1:])
+						command.SetArgs(v[1:])
 						connReq.command = command
 					default:
 						fmt.Printf("type %s", reflect.TypeOf(v))
