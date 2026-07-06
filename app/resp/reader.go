@@ -3,6 +3,7 @@ package resp
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 )
@@ -61,6 +62,8 @@ func (r *Reader) ReadReply() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("result")
+	fmt.Println(string(line))
 
 	switch line[0] {
 	case RespTypeStatus:
@@ -79,6 +82,7 @@ func (r *Reader) readLine() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(string(line))
 
 	// I know it's valid when the \r\n is valid one
 	if line[len(line)-1] != '\n' && line[len(line)-2] != '\r' {
