@@ -2,7 +2,6 @@ package commands
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -75,7 +74,6 @@ func (e *Echo) SetArgs(args ...any) {
 			panic("no other type is accepted")
 		}
 	}
-	fmt.Println(builder.String())
 	e.val = builder.String()
 }
 

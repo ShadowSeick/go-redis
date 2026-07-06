@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,6 +63,7 @@ func main() {
 					logger.Error("error getting result from ECHO", err)
 					return
 				}
+				fmt.Println(res)
 				data.writer.WriteType(resp.RespTypeString)
 				val := strconv.Itoa(len(res))
 				data.writer.WriteReply([]byte(val))
@@ -156,7 +156,6 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						command.SetArgs(vals[1:])
 						connReq.command = command
 					default:
-						fmt.Printf("type %s", reflect.TypeOf(v))
 						logger.Info("type not expected", v)
 						panic("type not expected")
 					}
