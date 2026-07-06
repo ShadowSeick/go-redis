@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-// This is going to be simple, this needs to respond with the values that should be written in the output.
-// \r\n, lengths, etc
 type Writer struct {
 	wt *bufio.Writer
 }
@@ -17,15 +15,22 @@ func NewWriter(w io.Writer) Writer {
 	}
 }
 
-func (w Writer) WriteType(reply byte) {
-	w.wt.WriteByte(reply)
+func (w Writer) WriteType(reply byte) error {
+	return w.wt.WriteByte(reply)
 }
 
-func (w Writer) WriteReply(reply []byte) {
-	w.wt.Write(reply)
-	w.writeFinal()
+func (w Writer) WriteReply(reply []byte) error {
+	if _, err := w.wt.Write(reply); err != nil {
+		return err
+	}
+	return w.crlf()
 }
 
-func (w Writer) writeFinal() {
-	w.wt.Write(carrierReturn)
+func (w Writer) crlf() error {
+	_, err := w.wt.Write(carrierReturn)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

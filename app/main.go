@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"strconv"
@@ -63,11 +62,17 @@ func main() {
 					logger.Error("error getting result from ECHO", err)
 					return
 				}
-				fmt.Println(data.command.String())
-				data.writer.WriteType(resp.RespTypeString)
+
+				if err := data.writer.WriteType(resp.RespTypeString); err != nil {
+					logger.Error("error writing to connection", err)
+				}
 				val := strconv.Itoa(len(res))
-				data.writer.WriteReply([]byte(val))
-				data.writer.WriteReply(res)
+				if err := data.writer.WriteReply([]byte(val)); err != nil {
+					logger.Error("error writing to connection 2", err)
+				}
+				if err := data.writer.WriteReply(res); err != nil {
+					logger.Error("error writing to connection 3", err)
+				}
 			default:
 				logger.Warn("command not implemented", data.command.String())
 			}
@@ -103,20 +108,6 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 					if len(m) == 0 {
 						continue
 					}
-
-					// Parse the request and return it to the event loop
-					// First create the parser, we can optimize later with sync.Pool
-					//
-					// Command takes those values and creates a new command with it
-					// Command makes the logic to know which is the result
-					// resp.Writer writes into the connection to respond to the user
-					// 1 - Create a valid command (parse the necessary values in it)
-					// 2 - Add whatever is needed in the command, this would be the arguments []any
-					// 3 - The command should take care of the logic
-					//
-					//
-					//
-					//
 
 					connReq := ConnectionRequest{
 						writer: resp.NewWriter(conn),
