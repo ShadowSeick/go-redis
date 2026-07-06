@@ -145,7 +145,7 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						command.SetArgs(v[1:])
 						connReq.command = command
 					default:
-						logger.Info("type not expected", v)
+						logger.Info("type not expected, %v", v)
 						panic("type not expected")
 					}
 
