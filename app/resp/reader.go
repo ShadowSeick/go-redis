@@ -103,6 +103,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 	if err != nil && err != io.EOF {
 		return "", err
 	}
+	fmt.Printf("%d bytes copied", n)
 
 	if int(size) != n {
 		return "", errors.New("the actual string was shorter than expected")
