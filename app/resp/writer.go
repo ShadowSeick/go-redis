@@ -27,5 +27,5 @@ func (w Writer) WriteReply(reply []byte) {
 }
 
 func (w Writer) writeFinal() {
-	w.wt.Write([]byte("\r\n"))
+	w.wt.Write(carrierReturn)
 }

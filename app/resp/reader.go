@@ -32,6 +32,8 @@ const (
 	RespTypePush      = '>' // ><len>\r\n... (same as Array)
 )
 
+var carrierReturn = []byte{'\r', '\n'}
+
 // DefaultBufferSize is the default size for read/write buffers (32 KiB).
 const DefaultBufferSize = 32 * 1024
 
@@ -87,7 +89,7 @@ func (r *Reader) readLine() ([]byte, error) {
 	}
 	fmt.Println(string(line))
 
-	return line[:len(line)-2], nil
+	return line[:len(line)-len(carrierReturn)], nil
 }
 
 func (r *Reader) readString(line []byte) (string, error) {
@@ -96,7 +98,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	str := make([]byte, size)
+	str := make([]byte, size+len(carrierReturn))
 	n, err := io.ReadFull(r.rd, str)
 	if err != nil && err != io.EOF {
 		return "", err
@@ -106,10 +108,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", errors.New("the actual string was shorter than expected")
 	}
 
-	// We discard the Carrier return \r\n at the end of the string
-	r.Discard(2)
-
-	return string(str), nil
+	return string(str[:len(str)-len(carrierReturn)]), nil
 }
 
 func (r *Reader) readArray(line []byte) ([]any, error) {
