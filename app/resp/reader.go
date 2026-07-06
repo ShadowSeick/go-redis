@@ -104,12 +104,10 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	if errors.Is(err, io.EOF) {
-		fmt.Println("EOF")
-	}
-
 	if int(size) != n {
+		fmt.Println("SIZE")
 		fmt.Println(size)
+		fmt.Println("Actual read")
 		fmt.Println(n)
 		fmt.Println(string(str))
 		return "", errors.New("the actual string was shorter than expected")
