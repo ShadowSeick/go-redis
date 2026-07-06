@@ -63,7 +63,7 @@ func main() {
 					logger.Error("error getting result from ECHO", err)
 					return
 				}
-				fmt.Println(string(res))
+				fmt.Println(data.command.String())
 				data.writer.WriteType(resp.RespTypeString)
 				val := strconv.Itoa(len(res))
 				data.writer.WriteReply([]byte(val))
