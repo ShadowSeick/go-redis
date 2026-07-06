@@ -2,8 +2,6 @@ package commands
 
 import (
 	"errors"
-	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -66,17 +64,13 @@ func (e *Echo) String() string {
 
 func (e *Echo) SetArgs(args ...any) {
 	var builder strings.Builder
-	fmt.Println(reflect.TypeOf(args))
 	for _, v := range args {
 		switch t := v.(type) {
-		case string:
-			builder.WriteString(t)
-		case byte:
-			builder.WriteByte(t)
-		case rune:
-			builder.WriteRune(t)
+		case []string:
+			for _, s := range t {
+				builder.WriteString(s)
+			}
 		default:
-			fmt.Println(reflect.TypeOf(t))
 			panic("no other type is accepted")
 		}
 	}
