@@ -66,6 +66,7 @@ func (e *Echo) String() string {
 
 func (e *Echo) SetArgs(args ...any) {
 	var builder strings.Builder
+	fmt.Println(reflect.TypeOf(args))
 	for _, v := range args {
 		switch t := v.(type) {
 		case string:
