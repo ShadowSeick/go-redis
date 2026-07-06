@@ -98,20 +98,17 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", err
 	}
 
-	str := make([]byte, size+len(carrierReturn))
+	str := make([]byte, size)
 	n, err := io.ReadFull(r.rd, str)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", err
 	}
 
-	if int(size)+len(carrierReturn) != n {
-		fmt.Println("SIZE")
-		fmt.Println(size)
-		fmt.Println("Actual read")
-		fmt.Println(n)
-		fmt.Println(string(str))
+	if int(size) != n {
 		return "", errors.New("the actual string was shorter than expected")
 	}
+
+	r.Discard(len(carrierReturn))
 
 	return string(str[:len(str)-len(carrierReturn)]), nil
 }
