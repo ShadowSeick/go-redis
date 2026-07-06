@@ -53,6 +53,7 @@ func main() {
 					logger.Error("error getting result from PING", err)
 					return
 				}
+				data.writer.WriteType(resp.RespTypeStatus)
 				data.writer.WriteReply(res)
 			case *commands.Echo:
 				res, err := data.command.Result()
@@ -60,6 +61,7 @@ func main() {
 					logger.Error("error getting result from ECHO", err)
 					return
 				}
+				data.writer.WriteType(resp.RespTypeString)
 				val := strconv.Itoa(len(res))
 				data.writer.WriteReply([]byte(val))
 				data.writer.WriteReply(res)

@@ -17,6 +17,10 @@ func NewWriter(w io.Writer) Writer {
 	}
 }
 
+func (w Writer) WriteType(reply byte) {
+	w.wt.WriteByte(reply)
+}
+
 func (w Writer) WriteReply(reply []byte) {
 	w.wt.Write(reply)
 	w.writeFinal()
