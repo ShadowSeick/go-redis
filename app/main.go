@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"strconv"
@@ -145,7 +146,8 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						command.SetArgs(v[1:])
 						connReq.command = command
 					default:
-						logger.Info("type not expected, %v", v)
+						fmt.Printf("type %v", v)
+						logger.Info("type not expected", v)
 						panic("type not expected")
 					}
 
