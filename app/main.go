@@ -2,23 +2,17 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 
-	"github.com/codecrafters-io/redis-starter-go/app/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/logging"
-	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 var logger logging.Logger
 
-type ConnectionRequest struct {
-	writer  *resp.Writer
-	command commands.Command
-}
+var globalMemory = make(map[string]any)
 
 func main() {
 	config := net.ListenConfig{}
@@ -32,129 +26,62 @@ func main() {
 	}
 	logger.Info("TCP connection opened in port 6379")
 
-	clientChannel := make(chan ConnectionRequest)
+	channel := make(chan *Conn)
 	var wg sync.WaitGroup
-	go listenNewConnections(ctx, l, clientChannel, &wg)
+	go listenNewConnections(ctx, l, channel, &wg)
 
 	for {
 		select {
 		case <-ctx.Done():
 			wg.Wait()
-			close(clientChannel)
+			close(channel)
 			return
-		case data, ok := <-clientChannel:
+		case conn, ok := <-channel:
 			if !ok {
+				fmt.Println("is it ok")
 				return
 			}
 
-			switch data.command.(type) {
-			case commands.Ping:
-				res, err := data.command.Result()
-				if err != nil {
-					logger.Error("error getting result from PING", err)
-					return
-				}
-				data.writer.WriteType(resp.RespTypeStatus)
-				data.writer.WriteReply(res)
-			case *commands.Echo:
-				res, err := data.command.Result()
-				if err != nil {
-					logger.Error("error getting result from ECHO", err)
-					return
-				}
-
-				if err := data.writer.WriteType(resp.RespTypeString); err != nil {
-					logger.Error("error writing to connection", err)
-				}
-				val := strconv.Itoa(len(res))
-				if err := data.writer.WriteReply([]byte(val)); err != nil {
-					logger.Error("error writing to connection 2", err)
-				}
-				if err := data.writer.WriteReply(res); err != nil {
-					logger.Error("error writing to connection 3", err)
-				}
-
-			default:
-				logger.Warn("command not implemented", data.command.String())
-			}
-
-			data.writer.Flush()
+			// Something is fishy when we have too many connection, probably I will need some sort of pool for connections
+			logger.Info("process")
+			conn.Process()
+			logger.Info("proccessed")
 		}
 	}
 }
 
-func listenNewConnections(ctx context.Context, l net.Listener, clientChannel chan ConnectionRequest, wg *sync.WaitGroup) {
+func listenNewConnections(ctx context.Context, l net.Listener, clientChannel chan *Conn, wg *sync.WaitGroup) {
 	for {
-		conn, err := l.Accept()
+		c, err := l.Accept()
 		if err != nil {
 			logger.Error("error accepting connection", err)
 			os.Exit(1)
 		}
-		logger.Info("accepted connection from", "connection", conn.RemoteAddr())
+		logger.Info("accepted connection from", "connection", c.RemoteAddr())
 
-		// Spawn new goroutine each time a new connection is accepted
 		wg.Go(func() {
 			for {
 				select {
+				// Pretty much sure this shouldn't be here. We don't want to close the connection when the context is done.
+				// We want to close the connection when there is no more data received, when the client has closed the connection in their end
 				case <-ctx.Done():
-					conn.Close()
+					c.Close()
 					return
 				default:
-					reader := resp.NewReader(conn)
-					m, err := reader.Peek(1)
+					conn := NewConnection(c)
+					m, err := conn.reader.Peek(1)
 					if err != nil {
 						logger.Error("error reading data from client", err)
 						conn.Close()
 						return
 					}
+					fmt.Println("here")
 
 					if len(m) == 0 {
 						continue
 					}
 
-					connReq := ConnectionRequest{
-						writer: resp.NewWriter(conn),
-					}
-
-					reply, err := reader.ReadReply()
-					if err != nil {
-						logger.Error("error reading client reply", err)
-						return
-					}
-
-					switch v := reply.(type) {
-					case string: // simple command
-						cmd := strings.ToLower(v)
-						command, err := commands.New(cmd)
-						if err != nil {
-							logger.Error("error parsing string", err)
-							return
-						}
-						connReq.command = command
-					case []any: // Multiple command. I need a better way of doing this
-						vals := make([]string, len(v))
-						for i, s := range v {
-							switch t := s.(type) {
-							case string:
-								vals[i] = t
-							default:
-								panic("type not expected")
-							}
-						}
-						cmd := strings.ToLower(vals[0])
-						command, err := commands.New(cmd)
-						if err != nil {
-							logger.Error("error parsing array string", err)
-							return
-						}
-						command.SetArgs(vals[1:])
-						connReq.command = command
-					default:
-						logger.Info("type not expected", v)
-						panic("type not expected")
-					}
-
-					clientChannel <- connReq
+					clientChannel <- conn
 				}
 			}
 		})

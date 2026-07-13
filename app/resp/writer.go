@@ -15,7 +15,7 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
-// This should encapsulate the right writing. It should only have WriteString
+// This needs to be changed. I don't like the way I am delegating this into the caller of the writer
 func (w Writer) WriteType(reply byte) error {
 	return w.wt.WriteByte(reply)
 }
@@ -28,7 +28,7 @@ func (w Writer) WriteReply(reply []byte) error {
 }
 
 func (w Writer) crlf() error {
-	_, err := w.wt.Write(carrierReturn)
+	_, err := w.wt.Write(crlf)
 	if err != nil {
 		return err
 	}
