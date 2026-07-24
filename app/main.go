@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -41,7 +40,6 @@ func main() {
 			return
 		case conn, ok := <-channel:
 			if !ok {
-				fmt.Println("is it ok")
 				return
 			}
 

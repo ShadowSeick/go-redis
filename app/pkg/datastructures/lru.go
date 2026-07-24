@@ -2,7 +2,6 @@ package datastructures
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -38,13 +37,6 @@ func (elru *ExpiryLRU) Get(key string) *any {
 		return nil
 	}
 
-	if node.expiry != nil {
-		fmt.Println("EXPIRY")
-		fmt.Println(*node.expiry)
-		fmt.Println(time.Now())
-		fmt.Println(node.value)
-	}
-
 	if node.expiry != nil && time.Now().After(*node.expiry) {
 		elru.remove(key)
 		return nil
@@ -64,11 +56,9 @@ func (elru *ExpiryLRU) Set(key string, value any, expiry int) {
 	if expiry > 0 {
 		expiryTime := time.Now().Add(time.Duration(expiry) * time.Millisecond)
 		node.expiry = &expiryTime
-		fmt.Println(node.expiry)
 	}
 
 	elru.hash[key] = node
-	fmt.Println(elru.hash)
 	elru.moveToTop(node)
 }
 

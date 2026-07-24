@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	nullString = "-1"
+	NullString = "-1"
 
 	// Errors
 	ErrNotValidCommand = errors.New("not a valid command")
@@ -220,7 +220,7 @@ func (g *Get) Process(lru datastructures.LRU) error {
 	switch v := g.val.(type) {
 	case string:
 		val := lru.Get(v)
-		g.val = nullString
+		g.val = NullString
 
 		if val != nil {
 			g.val = *val

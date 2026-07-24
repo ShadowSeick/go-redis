@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"net"
 	"strconv"
 	"strings"
@@ -118,10 +119,14 @@ func (c *Conn) processCommand(command commands.Command) {
 		if err := c.writer.WriteType(resp.RespTypeString); err != nil {
 			logger.Error("error writing to connection", err)
 		}
-		val := strconv.Itoa(len(res))
-		if err := c.writer.WriteReply([]byte(val)); err != nil {
-			logger.Error("error writing to connection 2", err)
+
+		if !bytes.Equal(res, []byte(commands.NullString)) {
+			val := strconv.Itoa(len(res))
+			if err := c.writer.WriteReply([]byte(val)); err != nil {
+				logger.Error("error writing to connection 2", err)
+			}
 		}
+
 		if err := c.writer.WriteReply(res); err != nil {
 			logger.Error("error writing to connection 3", err)
 		}
