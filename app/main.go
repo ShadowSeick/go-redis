@@ -7,17 +7,20 @@ import (
 	"os"
 	"sync"
 
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/logging"
 )
 
-var logger logging.Logger
-
-var globalMemory = make(map[string]any)
+var (
+	logger logging.Logger
+	memory *datastructures.ExpiryLRU
+)
 
 func main() {
 	config := net.ListenConfig{}
 	ctx := context.Background()
 	logger = logging.NewStructuredLogger()
+	memory = datastructures.NewExpiryLRU()
 
 	l, err := config.Listen(ctx, "tcp", "0.0.0.0:6379")
 	if err != nil {
@@ -42,10 +45,7 @@ func main() {
 				return
 			}
 
-			// Something is fishy when we have too many connection, probably I will need some sort of pool for connections
-			logger.Info("process")
 			conn.Process()
-			logger.Info("proccessed")
 		}
 	}
 }
@@ -75,7 +75,6 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 						conn.Close()
 						return
 					}
-					fmt.Println("here")
 
 					if len(m) == 0 {
 						continue

@@ -2,8 +2,10 @@ package commands
 
 import (
 	"errors"
-	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
 )
 
 var (
@@ -109,9 +111,23 @@ func (e *Echo) Result() []byte {
 }
 
 type Set struct {
-	val []string
-	err error
+	key    string
+	value  string
+	expiry int
+	err    error
 }
+
+var (
+	ErrNotValidExpiryValue  = errors.New("not a valid expirty value")
+	ErrNotValidNumberOfArgs = errors.New("not a valid number of args")
+	ErrNotValidSetOption    = errors.New("not a valid SET option")
+)
+
+// Set Options
+const (
+	PX = "px"
+	EX = "ex"
+)
 
 func (s *Set) String() string {
 	return CommandTypeSet.String()
@@ -121,14 +137,32 @@ func (s *Set) SetArgs(args ...any) {
 	for _, v := range args {
 		switch t := v.(type) {
 		case []string:
-			if len(t) != 2 {
-				s.err = fmt.Errorf("not a valid number of args %d", len(t))
+			if len(t) != 2 && len(t) != 4 {
+				s.err = ErrNotValidNumberOfArgs
 				return
 			}
 
-			s.val = t
+			s.key = t[0]
+			s.value = t[1]
+			if len(t) == 4 {
+				expiry, err := strconv.Atoi(t[3])
+				if err != nil {
+					s.err = ErrNotValidExpiryValue
+					return
+				}
+				switch strings.ToLower(t[2]) {
+				case PX:
+					s.expiry = expiry
+				case EX:
+					s.expiry = expiry * 1_000
+				default:
+					s.err = ErrNotValidSetOption
+					return
+				}
+			}
 		default:
 			s.err = ErrTypeNotAllowed
+			return
 		}
 	}
 }
@@ -137,12 +171,12 @@ func (s *Set) Error() error {
 	return s.err
 }
 
-func (s *Set) Process(hashMap map[string]any) error {
+func (s *Set) Process(lru datastructures.LRU) error {
 	if s.err != nil {
 		return s.err
 	}
 
-	hashMap[s.val[0]] = s.val[1]
+	lru.Set(s.key, s.value, s.expiry)
 	return nil
 }
 
@@ -178,20 +212,19 @@ func (g *Get) Error() error {
 	return g.err
 }
 
-func (g *Get) Process(hashMap map[string]any) error {
+func (g *Get) Process(lru datastructures.LRU) error {
 	if g.err != nil {
 		return g.err
 	}
 
 	switch v := g.val.(type) {
 	case string:
-		val, ok := hashMap[v]
-		if !ok {
-			g.val = nullString
-			return nil
-		}
+		val := lru.Get(v)
+		g.val = nullString
 
-		g.val = val
+		if val != nil {
+			g.val = *val
+		}
 	default:
 		g.err = ErrTypeNotAllowed
 	}

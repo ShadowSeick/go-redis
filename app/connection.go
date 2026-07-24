@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -35,7 +34,6 @@ func (c *Conn) Process() {
 		return
 	}
 
-	fmt.Println("processing...")
 	cmds := make([]commands.Command, 0)
 	switch v := reply.(type) {
 	case string: // simple command
@@ -103,7 +101,7 @@ func (c *Conn) processCommand(command commands.Command) {
 			logger.Error("error writing to connection 3", err)
 		}
 	case *commands.Set:
-		if err := cmd.Process(globalMemory); err != nil {
+		if err := cmd.Process(memory); err != nil {
 			logger.Error("error processing set", err)
 			return
 		}
@@ -111,7 +109,7 @@ func (c *Conn) processCommand(command commands.Command) {
 		c.writer.WriteType(resp.RespTypeStatus)
 		c.writer.WriteReply(cmd.Result())
 	case *commands.Get:
-		if err := cmd.Process(globalMemory); err != nil {
+		if err := cmd.Process(memory); err != nil {
 			logger.Error("error processing get", err)
 			return
 		}
