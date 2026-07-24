@@ -101,6 +101,20 @@ func (c *Conn) processCommand(command commands.Command) {
 			return
 		}
 		c.writeString(cmd)
+	case *commands.RPush:
+		if err := cmd.Process(memory); err != nil {
+			logger.Error("error processing rpush", err)
+			return
+		}
+		res := cmd.Result()
+		if err := c.writer.WriteType(resp.RespTypeInt); err != nil {
+			logger.Error("error writing to connection", err)
+			return
+		}
+		if err := c.writer.WriteReply([]byte(res)); err != nil {
+			logger.Error("error writing to connection", err)
+			return
+		}
 	default:
 		logger.Warn("command not implemented", cmd.String())
 	}

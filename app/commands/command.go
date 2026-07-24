@@ -23,14 +23,16 @@ const (
 	CommandTypeEcho
 	CommandTypeSet
 	CommandTypeGet
+	CommandTypeRPush
 	CommandTypeCount
 )
 
 var commandTypeStrings = [CommandTypeCount]string{
-	CommandTypePing: "ping",
-	CommandTypeEcho: "echo",
-	CommandTypeSet:  "set",
-	CommandTypeGet:  "get",
+	CommandTypePing:  "ping",
+	CommandTypeEcho:  "echo",
+	CommandTypeSet:   "set",
+	CommandTypeGet:   "get",
+	CommandTypeRPush: "rpush",
 }
 
 func (ct CommandType) String() string {
@@ -49,6 +51,8 @@ func New(name string) (Command, error) {
 				return &Set{}, nil
 			case CommandTypeGet:
 				return &Get{}, nil
+			case CommandTypeRPush:
+				return &RPush{}, nil
 			}
 		}
 	}
@@ -239,4 +243,62 @@ func (g *Get) Result() []byte {
 	default:
 		panic(ErrTypeNotAllowed.Error())
 	}
+}
+
+// I don't like the process command way I am doing. It seems verbose and not necessary.
+// I think this needs a refactor before going more into it. Result and process should be two the same
+// And I don't know who should be in charge of it. Connection?
+type RPush struct {
+	key      string
+	elements []string
+	err      error
+}
+
+func (rp *RPush) String() string {
+	return CommandTypeRPush.String()
+}
+
+func (rp *RPush) SetArgs(args ...any) {
+	for _, v := range args {
+		switch t := v.(type) {
+		case []string:
+			if len(t) < 2 {
+				rp.err = ErrNotValidNumberOfArgs
+				return
+			}
+			rp.key = t[0]
+			rp.elements = t[1:]
+		default:
+			rp.err = ErrTypeNotAllowed
+		}
+	}
+}
+
+func (rp *RPush) Error() error {
+	return rp.err
+}
+
+func (rp *RPush) Process(lru datastructures.LRU) error {
+	if rp.err != nil {
+		return rp.err
+	}
+
+	list := lru.Get(rp.key)
+	if list != nil {
+		switch t := (*list).(type) {
+		case []string:
+			t = append(t, rp.elements...)
+			*list = t
+		default:
+			rp.err = ErrTypeNotAllowed
+		}
+	}
+
+	lru.Set(rp.key, rp.elements, 0)
+
+	return rp.err
+}
+
+func (rp *RPush) Result() []byte {
+	return []byte(strconv.Itoa(len(rp.elements)))
 }
