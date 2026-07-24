@@ -82,55 +82,49 @@ func (c *Conn) processCommands(cmds []commands.Command) {
 func (c *Conn) processCommand(command commands.Command) {
 	switch cmd := command.(type) {
 	case commands.Ping:
-		c.writer.WriteType(resp.RespTypeStatus)
-		c.writer.WriteReply(cmd.Result())
+		c.writeStatus(cmd)
 	case *commands.Echo:
 		if err := cmd.Error(); err != nil {
 			logger.Error("error getting result from ECHO", err)
 			return
 		}
-		res := cmd.Result()
-
-		if err := c.writer.WriteType(resp.RespTypeString); err != nil {
-			logger.Error("error writing to connection", err)
-		}
-		val := strconv.Itoa(len(res))
-		if err := c.writer.WriteReply([]byte(val)); err != nil {
-			logger.Error("error writing to connection 2", err)
-		}
-		if err := c.writer.WriteReply(res); err != nil {
-			logger.Error("error writing to connection 3", err)
-		}
+		c.writeString(cmd)
 	case *commands.Set:
 		if err := cmd.Process(memory); err != nil {
 			logger.Error("error processing set", err)
 			return
 		}
-
-		c.writer.WriteType(resp.RespTypeStatus)
-		c.writer.WriteReply(cmd.Result())
+		c.writeStatus(cmd)
 	case *commands.Get:
 		if err := cmd.Process(memory); err != nil {
 			logger.Error("error processing get", err)
 			return
 		}
-		res := cmd.Result()
-
-		if err := c.writer.WriteType(resp.RespTypeString); err != nil {
-			logger.Error("error writing to connection", err)
-		}
-
-		if !bytes.Equal(res, []byte(commands.NullString)) {
-			val := strconv.Itoa(len(res))
-			if err := c.writer.WriteReply([]byte(val)); err != nil {
-				logger.Error("error writing to connection 2", err)
-			}
-		}
-
-		if err := c.writer.WriteReply(res); err != nil {
-			logger.Error("error writing to connection 3", err)
-		}
+		c.writeString(cmd)
 	default:
 		logger.Warn("command not implemented", cmd.String())
+	}
+}
+
+func (c *Conn) writeStatus(cmd commands.Command) {
+	c.writer.WriteType(resp.RespTypeStatus)
+	c.writer.WriteReply(cmd.Result())
+}
+
+func (c *Conn) writeString(cmd commands.Command) {
+	res := cmd.Result()
+	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
+		logger.Error("error writing to connection", err)
+	}
+
+	if !bytes.Equal(res, []byte(commands.NullString)) {
+		val := strconv.Itoa(len(res))
+		if err := c.writer.WriteReply([]byte(val)); err != nil {
+			logger.Error("error writing to connection 2", err)
+		}
+	}
+
+	if err := c.writer.WriteReply(res); err != nil {
+		logger.Error("error writing to connection 3", err)
 	}
 }
