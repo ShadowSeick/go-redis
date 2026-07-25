@@ -152,7 +152,7 @@ func (c *Conn) processCommand(command commands.Command) error {
 			case []string:
 				start := cmd.Start
 				stop := cmd.Stop
-				length := len(t) - 1
+				length := len(t)
 
 				if start < 0 {
 					start = max(length+start, 0)
