@@ -28,18 +28,20 @@ const (
 	CommandTypeLPush
 	CommandTypeLRange
 	CommandTypeLLen
+	CommandTypeLPop
 	CommandTypeCount
 )
 
 var commandTypeStrings = [CommandTypeCount]string{
-	CommandTypePing:    "ping",
-	CommandTypeEcho:    "echo",
-	CommandTypeSet:     "set",
-	CommandTypeGet:     "get",
-	CommandTypeRPush:   "rpush",
-	CommandTypeLPush:   "lpush",
-	CommandTypeLRange:  "lrange",
-	CommandTypeLLen: "llen",
+	CommandTypePing:   "ping",
+	CommandTypeEcho:   "echo",
+	CommandTypeSet:    "set",
+	CommandTypeGet:    "get",
+	CommandTypeRPush:  "rpush",
+	CommandTypeLPush:  "lpush",
+	CommandTypeLRange: "lrange",
+	CommandTypeLPop:   "lpop",
+	CommandTypeLLen:   "llen",
 }
 
 func (ct CommandType) String() string {
@@ -66,6 +68,8 @@ func New(name string) (Command, error) {
 				return &LPush{}, nil
 			case CommandTypeLLen:
 				return &LLen{}, nil
+			case CommandTypeLPop:
+				return &LPop{}, nil
 			}
 		}
 	}
@@ -337,4 +341,33 @@ func (ll *LLen) SetArgs(args ...any) {
 
 func (ll *LLen) Error() error {
 	return ll.err
+}
+
+type LPop struct {
+	Key string
+	err error
+}
+
+func (lp *LPop) String() string {
+	return CommandTypeLPop.String()
+}
+
+func (lp *LPop) SetArgs(args ...any) {
+	for _, v := range args {
+		switch t := v.(type) {
+		case []string:
+			if len(t) != 1 {
+				lp.err = ErrNotValidNumberOfArgs
+				return
+			}
+
+			lp.Key = t[0]
+		default:
+			lp.err = ErrTypeNotAllowed
+		}
+	}
+}
+
+func (lp *LPop) Error() error {
+	return lp.err
 }

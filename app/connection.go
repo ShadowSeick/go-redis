@@ -214,6 +214,23 @@ func (c *Conn) processCommand(command commands.Command) error {
 		}
 
 		return c.writeInteger([]byte(strconv.Itoa(res)))
+	case *commands.LPop:
+		if err := cmd.Error(); err != nil {
+			return err
+		}
+
+		list := memory.Get(cmd.Key)
+		res := []byte(commands.NullString)
+		if list != nil {
+			switch t := (*list).(type) {
+			case []string:
+				res, *list = []byte(t[0]), t[1:]
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
+		}
+
+		return c.writeString(res)
 	default:
 		return fmt.Errorf("command not implemented")
 	}
