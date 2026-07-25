@@ -162,11 +162,11 @@ func (c *Conn) processCommand(command commands.Command) error {
 		res += len(cmd.Elements)
 		return c.writeInteger([]byte(strconv.Itoa(res)))
 	case *commands.LRange:
-		list := memory.Get(cmd.Key)
 		if err := cmd.Error(); err != nil {
 			return err
 		}
 
+		list := memory.Get(cmd.Key)
 		var res []string
 		if list != nil {
 			switch t := (*list).(type) {
@@ -197,6 +197,23 @@ func (c *Conn) processCommand(command commands.Command) error {
 		}
 
 		return c.writeArray(res)
+	case *commands.LLen:
+		if err := cmd.Error(); err != nil {
+			return err
+		}
+
+		list := memory.Get(cmd.Key)
+		var res int
+		if list != nil {
+			switch t := (*list).(type) {
+			case []string:
+				res = len(t)
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
+		}
+
+		return c.writeInteger([]byte(strconv.Itoa(res)))
 	default:
 		return fmt.Errorf("command not implemented")
 	}
