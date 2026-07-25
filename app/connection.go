@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -69,76 +70,171 @@ func (c *Conn) Process() {
 		panic("type not expected")
 	}
 
-	c.processCommands(cmds)
+	if err := c.processCommands(cmds); err != nil {
+		logger.Error("error processing commands", err)
+	}
 	c.writer.Flush()
 }
 
-func (c *Conn) processCommands(cmds []commands.Command) {
+func (c *Conn) processCommands(cmds []commands.Command) error {
 	for _, cmd := range cmds {
-		c.processCommand(cmd)
+		if err := c.processCommand(cmd); err != nil {
+			return fmt.Errorf("error processing command, %s: %w", cmd.String(), err)
+		}
 	}
+
+	return nil
 }
 
-func (c *Conn) processCommand(command commands.Command) {
+func (c *Conn) processCommand(command commands.Command) error {
 	switch cmd := command.(type) {
 	case commands.Ping:
-		c.writeStatus(cmd)
+		return c.writeStatus([]byte("PONG"))
 	case *commands.Echo:
 		if err := cmd.Error(); err != nil {
-			logger.Error("error getting result from ECHO", err)
-			return
+			return err
 		}
-		c.writeString(cmd)
+		return c.writeString([]byte(cmd.Val))
 	case *commands.Set:
-		if err := cmd.Process(memory); err != nil {
-			logger.Error("error processing set", err)
-			return
+		if err := cmd.Error(); err != nil {
+			return err
 		}
-		c.writeStatus(cmd)
+
+		memory.Set(cmd.Key, cmd.Value, cmd.Expiry)
+		return c.writeStatus([]byte("OK"))
 	case *commands.Get:
-		if err := cmd.Process(memory); err != nil {
-			logger.Error("error processing get", err)
-			return
+		if err := cmd.Error(); err != nil {
+			return err
 		}
-		c.writeString(cmd)
+
+		res := []byte(commands.NullString)
+		val := memory.Get(cmd.Key)
+		if val != nil {
+			switch v := (*val).(type) {
+			case string:
+				res = []byte(v)
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
+		}
+
+		return c.writeString(res)
 	case *commands.RPush:
-		if err := cmd.Process(memory); err != nil {
-			logger.Error("error processing rpush", err)
-			return
+		if err := cmd.Error(); err != nil {
+			return err
 		}
-		res := cmd.Result()
-		if err := c.writer.WriteType(resp.RespTypeInt); err != nil {
-			logger.Error("error writing to connection", err)
-			return
+
+		var res int
+		list := memory.Get(cmd.Key)
+		if list == nil {
+			memory.Set(cmd.Key, cmd.Elements, 0)
+		} else {
+			switch t := (*list).(type) {
+			case []string:
+				res += len(t)
+				*list = append(t, cmd.Elements...)
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
 		}
-		if err := c.writer.WriteReply([]byte(res)); err != nil {
-			logger.Error("error writing to connection", err)
-			return
+
+		res += len(cmd.Elements)
+		return c.writeInteger([]byte(strconv.Itoa(res)))
+	case *commands.LRange:
+		list := memory.Get(cmd.Key)
+		if err := cmd.Error(); err != nil {
+			return err
 		}
+
+		var res []string
+		if list != nil {
+			switch t := (*list).(type) {
+			case []string:
+				start := cmd.Start
+				stop := cmd.Stop
+				length := len(t) - 1
+
+				if start < 0 {
+					start = max(length+start, 0)
+				}
+
+				if cmd.Stop < 0 {
+					stop = max(length+stop, 0)
+				}
+
+				if start < stop && start < len(t) {
+					if stop >= len(t) {
+						res = t[start:]
+					} else {
+						res = t[start : stop+1]
+					}
+				}
+
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
+		}
+
+		return c.writeArray(res)
 	default:
-		logger.Warn("command not implemented", cmd.String())
+		return fmt.Errorf("command not implemented")
 	}
 }
 
-func (c *Conn) writeStatus(cmd commands.Command) {
-	c.writer.WriteType(resp.RespTypeStatus)
-	c.writer.WriteReply(cmd.Result())
+func (c *Conn) writeStatus(status []byte) error {
+	if err := c.writer.WriteType(resp.RespTypeStatus); err != nil {
+		return fmt.Errorf("error writting status type")
+	}
+	if err := c.writer.WriteReply(status); err != nil {
+		return fmt.Errorf("error writting status reply, %w", err)
+	}
+	return nil
 }
 
-func (c *Conn) writeString(cmd commands.Command) {
-	res := cmd.Result()
+func (c *Conn) writeString(value []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
-		logger.Error("error writing to connection", err)
+		return fmt.Errorf("error writting string type, %w", err)
 	}
-
-	if !bytes.Equal(res, []byte(commands.NullString)) {
-		val := strconv.Itoa(len(res))
-		if err := c.writer.WriteReply([]byte(val)); err != nil {
-			logger.Error("error writing to connection 2", err)
+	if !bytes.Equal(value, []byte(commands.NullString)) {
+		if err := c.writeLength(len(value)); err != nil {
+			return fmt.Errorf("error writting string length, %w", err)
 		}
 	}
-
-	if err := c.writer.WriteReply(res); err != nil {
-		logger.Error("error writing to connection 3", err)
+	if err := c.writer.WriteReply(value); err != nil {
+		return fmt.Errorf("error writting string reply, %w", err)
 	}
+	return nil
+}
+
+func (c *Conn) writeInteger(value []byte) error {
+	if err := c.writer.WriteType(resp.RespTypeInt); err != nil {
+		return fmt.Errorf("error writting int type, %w", err)
+	}
+	if err := c.writer.WriteReply([]byte(value)); err != nil {
+		return fmt.Errorf("error writting int reply, %w", err)
+	}
+	return nil
+}
+
+func (c *Conn) writeArray(values []string) error {
+	if err := c.writer.WriteType(resp.RespTypeArray); err != nil {
+		return fmt.Errorf("error writting array type, %w", err)
+	}
+	if err := c.writeLength(len(values)); err != nil {
+		return fmt.Errorf("error writting array length, %w", err)
+	}
+	for _, val := range values {
+		if err := c.writeString([]byte(val)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Conn) writeLength(length int) error {
+	val := strconv.Itoa(length)
+	if err := c.writer.WriteReply([]byte(val)); err != nil {
+		return err
+	}
+	return nil
 }

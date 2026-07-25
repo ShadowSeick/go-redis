@@ -2,18 +2,19 @@ package commands
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
 )
 
 var (
 	NullString = "-1"
 
 	// Errors
-	ErrNotValidCommand = errors.New("not a valid command")
-	ErrTypeNotAllowed  = errors.New("not a valid type")
+	ErrNotValidCommand      = errors.New("not a valid command")
+	ErrTypeNotAllowed       = errors.New("not a valid type")
+	ErrNotValidArgType      = errors.New("not a valid argument type")
+	ErrNotValidNumberOfArgs = errors.New("not a valid number of args")
 )
 
 type CommandType uint8
@@ -24,15 +25,17 @@ const (
 	CommandTypeSet
 	CommandTypeGet
 	CommandTypeRPush
+	CommandTypeLRange
 	CommandTypeCount
 )
 
 var commandTypeStrings = [CommandTypeCount]string{
-	CommandTypePing:  "ping",
-	CommandTypeEcho:  "echo",
-	CommandTypeSet:   "set",
-	CommandTypeGet:   "get",
-	CommandTypeRPush: "rpush",
+	CommandTypePing:   "ping",
+	CommandTypeEcho:   "echo",
+	CommandTypeSet:    "set",
+	CommandTypeGet:    "get",
+	CommandTypeRPush:  "rpush",
+	CommandTypeLRange: "lrange",
 }
 
 func (ct CommandType) String() string {
@@ -53,6 +56,8 @@ func New(name string) (Command, error) {
 				return &Get{}, nil
 			case CommandTypeRPush:
 				return &RPush{}, nil
+			case CommandTypeLRange:
+				return &LRange{}, nil
 			}
 		}
 	}
@@ -62,7 +67,6 @@ func New(name string) (Command, error) {
 type Command interface {
 	String() string
 	SetArgs(...any)
-	Result() []byte
 	Error() error
 }
 
@@ -78,12 +82,8 @@ func (p Ping) Error() error {
 	return nil
 }
 
-func (p Ping) Result() []byte {
-	return []byte("PONG")
-}
-
 type Echo struct {
-	val string
+	Val string
 	err error
 }
 
@@ -92,14 +92,10 @@ func (e *Echo) String() string {
 }
 
 func (e *Echo) SetArgs(args ...any) {
-	var builder strings.Builder
 	for _, v := range args {
 		switch t := v.(type) {
 		case []string:
-			for _, s := range t {
-				builder.WriteString(s)
-			}
-			e.val = builder.String()
+			e.Val = t[0]
 		default:
 			e.err = ErrTypeNotAllowed
 		}
@@ -110,21 +106,16 @@ func (e *Echo) Error() error {
 	return e.err
 }
 
-func (e *Echo) Result() []byte {
-	return []byte(e.val)
-}
-
 type Set struct {
-	key    string
-	value  string
-	expiry int
+	Key    string
+	Value  string
+	Expiry int
 	err    error
 }
 
 var (
-	ErrNotValidExpiryValue  = errors.New("not a valid expirty value")
-	ErrNotValidNumberOfArgs = errors.New("not a valid number of args")
-	ErrNotValidSetOption    = errors.New("not a valid SET option")
+	ErrNotValidExpiryValue = errors.New("not a valid expirty value")
+	ErrNotValidSetOption   = errors.New("not a valid SET option")
 )
 
 // Set Options
@@ -146,8 +137,8 @@ func (s *Set) SetArgs(args ...any) {
 				return
 			}
 
-			s.key = t[0]
-			s.value = t[1]
+			s.Key = t[0]
+			s.Value = t[1]
 			if len(t) == 4 {
 				expiry, err := strconv.Atoi(t[3])
 				if err != nil {
@@ -156,9 +147,9 @@ func (s *Set) SetArgs(args ...any) {
 				}
 				switch strings.ToLower(t[2]) {
 				case PX:
-					s.expiry = expiry
+					s.Expiry = expiry
 				case EX:
-					s.expiry = expiry * 1_000
+					s.Expiry = expiry * 1_000
 				default:
 					s.err = ErrNotValidSetOption
 					return
@@ -175,21 +166,8 @@ func (s *Set) Error() error {
 	return s.err
 }
 
-func (s *Set) Process(lru datastructures.LRU) error {
-	if s.err != nil {
-		return s.err
-	}
-
-	lru.Set(s.key, s.value, s.expiry)
-	return nil
-}
-
-func (s *Set) Result() []byte {
-	return []byte("OK")
-}
-
 type Get struct {
-	val any
+	Key string
 	err error
 }
 
@@ -198,14 +176,10 @@ func (g *Get) String() string {
 }
 
 func (g *Get) SetArgs(args ...any) {
-	var builder strings.Builder
 	for _, v := range args {
 		switch t := v.(type) {
 		case []string:
-			for _, s := range t {
-				builder.WriteString(s)
-			}
-			g.val = builder.String()
+			g.Key = t[0]
 		default:
 			g.err = ErrTypeNotAllowed
 		}
@@ -216,38 +190,9 @@ func (g *Get) Error() error {
 	return g.err
 }
 
-func (g *Get) Process(lru datastructures.LRU) error {
-	if g.err != nil {
-		return g.err
-	}
-
-	switch v := g.val.(type) {
-	case string:
-		val := lru.Get(v)
-		g.val = NullString
-
-		if val != nil {
-			g.val = *val
-		}
-	default:
-		g.err = ErrTypeNotAllowed
-	}
-
-	return g.err
-}
-
-func (g *Get) Result() []byte {
-	switch v := g.val.(type) {
-	case string:
-		return []byte(v)
-	default:
-		panic(ErrTypeNotAllowed.Error())
-	}
-}
-
 type RPush struct {
-	key      string
-	elements []string
+	Key      string
+	Elements []string
 	res      int
 	err      error
 }
@@ -264,8 +209,8 @@ func (rp *RPush) SetArgs(args ...any) {
 				rp.err = ErrNotValidNumberOfArgs
 				return
 			}
-			rp.key = t[0]
-			rp.elements = t[1:]
+			rp.Key = t[0]
+			rp.Elements = t[1:]
 		default:
 			rp.err = ErrTypeNotAllowed
 		}
@@ -276,31 +221,49 @@ func (rp *RPush) Error() error {
 	return rp.err
 }
 
-func (rp *RPush) Process(lru datastructures.LRU) error {
-	if rp.err != nil {
-		return rp.err
-	}
-
-	list := lru.Get(rp.key)
-	if list == nil {
-		lru.Set(rp.key, rp.elements, 0)
-	}
-
-	if list != nil {
-		switch t := (*list).(type) {
-		case []string:
-			*list = append(t, rp.elements...)
-			rp.res = len(t)
-
-		default:
-			rp.err = ErrTypeNotAllowed
-		}
-	}
-	rp.res += len(rp.elements)
-
-	return rp.err
+type LRange struct {
+	Key   string
+	Start int
+	Stop  int
+	err   error
 }
 
-func (rp *RPush) Result() []byte {
-	return []byte(strconv.Itoa(rp.res))
+func (lr *LRange) String() string {
+	return CommandTypeLRange.String()
+}
+
+func (lr *LRange) SetArgs(args ...any) {
+	for _, arg := range args {
+		switch list := arg.(type) {
+		case []string:
+			if len(list) != 3 {
+				lr.err = ErrNotValidNumberOfArgs
+				return
+			}
+
+			lr.Key = list[0]
+
+			start, err := strconv.Atoi(list[1])
+			if err != nil {
+				lr.err = fmt.Errorf("%w, %w", ErrNotValidArgType, err)
+				return
+			}
+
+			stop, err := strconv.Atoi(list[2])
+			if err != nil {
+				lr.err = fmt.Errorf("%w, %w", ErrNotValidArgType, err)
+				return
+			}
+
+			lr.Start = start
+			lr.Stop = stop
+
+		default:
+			lr.err = ErrTypeNotAllowed
+		}
+	}
+}
+
+func (lr *LRange) Error() error {
+	return lr.err
 }
