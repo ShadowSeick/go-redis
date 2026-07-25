@@ -245,9 +245,6 @@ func (g *Get) Result() []byte {
 	}
 }
 
-// I don't like the process command way I am doing. It seems verbose and not necessary.
-// I think this needs a refactor before going more into it. Result and process should be two the same
-// And I don't know who should be in charge of it. Connection?
 type RPush struct {
 	key      string
 	elements []string

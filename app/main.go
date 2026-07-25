@@ -60,8 +60,6 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 		wg.Go(func() {
 			for {
 				select {
-				// Pretty much sure this shouldn't be here. We don't want to close the connection when the context is done.
-				// We want to close the connection when there is no more data received, when the client has closed the connection in their end
 				case <-ctx.Done():
 					c.Close()
 					return
