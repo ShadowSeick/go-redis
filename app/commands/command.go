@@ -344,8 +344,9 @@ func (ll *LLen) Error() error {
 }
 
 type LPop struct {
-	Key string
-	err error
+	Key   string
+	Count int
+	err   error
 }
 
 func (lp *LPop) String() string {
@@ -356,12 +357,20 @@ func (lp *LPop) SetArgs(args ...any) {
 	for _, v := range args {
 		switch t := v.(type) {
 		case []string:
-			if len(t) != 1 {
+			if len(t) < 1 {
 				lp.err = ErrNotValidNumberOfArgs
 				return
 			}
 
 			lp.Key = t[0]
+
+			if len(t) == 2 {
+				count, err := strconv.Atoi(t[1])
+				if err != nil {
+					lp.err = ErrNotValidArgType
+				}
+				lp.Count = count
+			}
 		default:
 			lp.err = ErrTypeNotAllowed
 		}

@@ -220,17 +220,34 @@ func (c *Conn) processCommand(command commands.Command) error {
 		}
 
 		list := memory.Get(cmd.Key)
-		res := []byte(commands.NullString)
+		var res []string
 		if list != nil {
 			switch t := (*list).(type) {
 			case []string:
-				res, *list = []byte(t[0]), t[1:]
+				if len(t) > 0 {
+					index := min(cmd.Count, len(t))
+					index = max(index, 1)
+					if index >= len(t) {
+						res = t[:]
+						*list = nil
+					} else {
+						res, *list = t[0:index], t[index:]
+					}
+				}
 			default:
 				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
 			}
 		}
 
-		return c.writeString(res)
+		if len(res) == 0 {
+			res = append(res, commands.NullString)
+		}
+
+		if len(res) > 1 {
+			return c.writeArray(res)
+		} else {
+			return c.writeString([]byte(res[0]))
+		}
 	default:
 		return fmt.Errorf("command not implemented")
 	}
