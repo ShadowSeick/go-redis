@@ -140,6 +140,27 @@ func (c *Conn) processCommand(command commands.Command) error {
 
 		res += len(cmd.Elements)
 		return c.writeInteger([]byte(strconv.Itoa(res)))
+	case *commands.LPush:
+		if err := cmd.Error(); err != nil {
+			return err
+		}
+
+		var res int
+		list := memory.Get(cmd.Key)
+		if list == nil {
+			memory.Set(cmd.Key, cmd.Elements, 0)
+		} else {
+			switch t := (*list).(type) {
+			case []string:
+				res += len(t)
+				*list = append(cmd.Elements, t...)
+			default:
+				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
+			}
+		}
+
+		res += len(cmd.Elements)
+		return c.writeInteger([]byte(strconv.Itoa(res)))
 	case *commands.LRange:
 		list := memory.Get(cmd.Key)
 		if err := cmd.Error(); err != nil {

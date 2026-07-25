@@ -25,6 +25,7 @@ const (
 	CommandTypeSet
 	CommandTypeGet
 	CommandTypeRPush
+	CommandTypeLPush
 	CommandTypeLRange
 	CommandTypeCount
 )
@@ -35,6 +36,7 @@ var commandTypeStrings = [CommandTypeCount]string{
 	CommandTypeSet:    "set",
 	CommandTypeGet:    "get",
 	CommandTypeRPush:  "rpush",
+	CommandTypeLPush:  "lpush",
 	CommandTypeLRange: "lrange",
 }
 
@@ -58,6 +60,8 @@ func New(name string) (Command, error) {
 				return &RPush{}, nil
 			case CommandTypeLRange:
 				return &LRange{}, nil
+			case CommandTypeLPush:
+				return &LPush{}, nil
 			}
 		}
 	}
@@ -219,6 +223,40 @@ func (rp *RPush) SetArgs(args ...any) {
 
 func (rp *RPush) Error() error {
 	return rp.err
+}
+
+type LPush struct {
+	Key      string
+	Elements []string
+	res      int
+	err      error
+}
+
+func (lp *LPush) String() string {
+	return CommandTypeLPush.String()
+}
+
+func (lp *LPush) SetArgs(args ...any) {
+	for _, v := range args {
+		switch t := v.(type) {
+		case []string:
+			if len(t) < 2 {
+				lp.err = ErrNotValidNumberOfArgs
+				return
+			}
+			lp.Key = t[0]
+			lp.Elements = make([]string, len(t)-1)
+			for i := len(t) - 1; i >= 1; i-- {
+				lp.Elements[len(lp.Elements)-i] = t[i]
+			}
+		default:
+			lp.err = ErrTypeNotAllowed
+		}
+	}
+}
+
+func (lp *LPush) Error() error {
+	return lp.err
 }
 
 type LRange struct {
