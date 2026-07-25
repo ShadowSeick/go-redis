@@ -248,6 +248,7 @@ func (g *Get) Result() []byte {
 type RPush struct {
 	key      string
 	elements []string
+	res      int
 	err      error
 }
 
@@ -281,21 +282,25 @@ func (rp *RPush) Process(lru datastructures.LRU) error {
 	}
 
 	list := lru.Get(rp.key)
+	if list == nil {
+		lru.Set(rp.key, rp.elements, 0)
+	}
+
 	if list != nil {
 		switch t := (*list).(type) {
 		case []string:
-			t = append(t, rp.elements...)
-			*list = t
+			*list = append(t, rp.elements...)
+			rp.res = len(t)
+
 		default:
 			rp.err = ErrTypeNotAllowed
 		}
 	}
-
-	lru.Set(rp.key, rp.elements, 0)
+	rp.res += len(rp.elements)
 
 	return rp.err
 }
 
 func (rp *RPush) Result() []byte {
-	return []byte(strconv.Itoa(len(rp.elements)))
+	return []byte(strconv.Itoa(rp.res))
 }
