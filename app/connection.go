@@ -5,255 +5,46 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/logging"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 type Conn struct {
 	conn   net.Conn
+	logger logging.Logger
 	reader *resp.Reader
 	writer *resp.Writer
 }
 
-func NewConnection(conn net.Conn) *Conn {
+func NewConnection(conn net.Conn, logger logging.Logger, memory datastructures.LRU) *Conn {
 	return &Conn{
 		conn:   conn,
+		logger: logger,
 		reader: resp.NewReader(conn),
 		writer: resp.NewWriter(conn),
 	}
+}
+
+func (c *Conn) Peek(n int) ([]byte, error) {
+	return c.reader.Peek(n)
 }
 
 func (c *Conn) Close() {
 	c.conn.Close()
 }
 
-func (c *Conn) Process() {
-	reply, err := c.reader.ReadReply()
-	if err != nil {
-		logger.Error("error reading client reply", err)
-		return
-	}
-
-	cmds := make([]commands.Command, 0)
-	switch v := reply.(type) {
-	case string: // simple command
-		cmd := strings.ToLower(v)
-		command, err := commands.New(cmd)
-		if err != nil {
-			logger.Error("error parsing string", err)
-			return
-		}
-		cmds = append(cmds, command)
-	case []any: // Multiple command.
-		vals := make([]string, len(v))
-		for i, s := range v {
-			switch t := s.(type) {
-			case string:
-				vals[i] = t
-			default:
-				panic("type not expected")
-			}
-		}
-
-		cmd := strings.ToLower(vals[0])
-		command, err := commands.New(cmd)
-		if err != nil {
-			logger.Error("error parsing array string", err)
-			return
-		}
-		command.SetArgs(vals[1:])
-		cmds = append(cmds, command)
-	default:
-		logger.Info("type not expected", v)
-		panic("type not expected")
-	}
-
-	if err := c.processCommands(cmds); err != nil {
-		logger.Error("error processing commands", err)
-	}
-	c.writer.Flush()
+func (c *Conn) ReadReply() (any, error) {
+	return c.reader.ReadReply()
 }
 
-func (c *Conn) processCommands(cmds []commands.Command) error {
-	for _, cmd := range cmds {
-		if err := c.processCommand(cmd); err != nil {
-			return fmt.Errorf("error processing command, %s: %w", cmd.String(), err)
-		}
-	}
-
-	return nil
+func (c *Conn) Flush() error {
+	return c.writer.Flush()
 }
 
-func (c *Conn) processCommand(command commands.Command) error {
-	switch cmd := command.(type) {
-	case commands.Ping:
-		return c.writeStatus([]byte("PONG"))
-	case *commands.Echo:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-		return c.writeString([]byte(cmd.Val))
-	case *commands.Set:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		memory.Set(cmd.Key, cmd.Value, cmd.Expiry)
-		return c.writeStatus([]byte("OK"))
-	case *commands.Get:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		res := []byte(commands.NullString)
-		val := memory.Get(cmd.Key)
-		if val != nil {
-			switch v := (*val).(type) {
-			case string:
-				res = []byte(v)
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		return c.writeString(res)
-	case *commands.RPush:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		var res int
-		list := memory.Get(cmd.Key)
-		if list == nil {
-			memory.Set(cmd.Key, cmd.Elements, 0)
-		} else {
-			switch t := (*list).(type) {
-			case []string:
-				res += len(t)
-				*list = append(t, cmd.Elements...)
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		res += len(cmd.Elements)
-		return c.writeInteger([]byte(strconv.Itoa(res)))
-	case *commands.LPush:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		var res int
-		list := memory.Get(cmd.Key)
-		if list == nil {
-			memory.Set(cmd.Key, cmd.Elements, 0)
-		} else {
-			switch t := (*list).(type) {
-			case []string:
-				res += len(t)
-				*list = append(cmd.Elements, t...)
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		res += len(cmd.Elements)
-		return c.writeInteger([]byte(strconv.Itoa(res)))
-	case *commands.LRange:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		list := memory.Get(cmd.Key)
-		var res []string
-		if list != nil {
-			switch t := (*list).(type) {
-			case []string:
-				start := cmd.Start
-				stop := cmd.Stop
-				length := len(t)
-
-				if start < 0 {
-					start = max(length+start, 0)
-				}
-
-				if cmd.Stop < 0 {
-					stop = max(length+stop, 0)
-				}
-
-				if start < stop && start < len(t) {
-					if stop >= len(t) {
-						res = t[start:]
-					} else {
-						res = t[start : stop+1]
-					}
-				}
-
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		return c.writeArray(res)
-	case *commands.LLen:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		list := memory.Get(cmd.Key)
-		var res int
-		if list != nil {
-			switch t := (*list).(type) {
-			case []string:
-				res = len(t)
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		return c.writeInteger([]byte(strconv.Itoa(res)))
-	case *commands.LPop:
-		if err := cmd.Error(); err != nil {
-			return err
-		}
-
-		list := memory.Get(cmd.Key)
-		var res []string
-		if list != nil {
-			switch t := (*list).(type) {
-			case []string:
-				if len(t) > 0 {
-					index := min(cmd.Count, len(t))
-					index = max(index, 1)
-					if index >= len(t) {
-						res = t[:]
-						*list = nil
-					} else {
-						res, *list = t[0:index], t[index:]
-					}
-				}
-			default:
-				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
-			}
-		}
-
-		if len(res) == 0 {
-			res = append(res, commands.NullString)
-		}
-
-		if len(res) > 1 {
-			return c.writeArray(res)
-		} else {
-			return c.writeString([]byte(res[0]))
-		}
-	default:
-		return fmt.Errorf("command not implemented")
-	}
-}
-
-func (c *Conn) writeStatus(status []byte) error {
+func (c *Conn) WriteStatus(status []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeStatus); err != nil {
 		return fmt.Errorf("error writting status type")
 	}
@@ -263,12 +54,12 @@ func (c *Conn) writeStatus(status []byte) error {
 	return nil
 }
 
-func (c *Conn) writeString(value []byte) error {
+func (c *Conn) WriteString(value []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
 		return fmt.Errorf("error writting string type, %w", err)
 	}
 	if !bytes.Equal(value, []byte(commands.NullString)) {
-		if err := c.writeLength(len(value)); err != nil {
+		if err := c.WriteLength(len(value)); err != nil {
 			return fmt.Errorf("error writting string length, %w", err)
 		}
 	}
@@ -278,7 +69,7 @@ func (c *Conn) writeString(value []byte) error {
 	return nil
 }
 
-func (c *Conn) writeInteger(value []byte) error {
+func (c *Conn) WriteInteger(value []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeInt); err != nil {
 		return fmt.Errorf("error writting int type, %w", err)
 	}
@@ -288,22 +79,22 @@ func (c *Conn) writeInteger(value []byte) error {
 	return nil
 }
 
-func (c *Conn) writeArray(values []string) error {
+func (c *Conn) WriteArray(values []string) error {
 	if err := c.writer.WriteType(resp.RespTypeArray); err != nil {
 		return fmt.Errorf("error writting array type, %w", err)
 	}
-	if err := c.writeLength(len(values)); err != nil {
+	if err := c.WriteLength(len(values)); err != nil {
 		return fmt.Errorf("error writting array length, %w", err)
 	}
 	for _, val := range values {
-		if err := c.writeString([]byte(val)); err != nil {
+		if err := c.WriteString([]byte(val)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Conn) writeLength(length int) error {
+func (c *Conn) WriteLength(length int) error {
 	val := strconv.Itoa(length)
 	if err := c.writer.WriteReply([]byte(val)); err != nil {
 		return err

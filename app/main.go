@@ -5,14 +5,19 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/logging"
 )
 
+const defaultCleanTime = 100 * time.Millisecond
+
 var (
-	logger logging.Logger
-	memory *datastructures.ExpiryLRU
+	logger           logging.Logger
+	memory           datastructures.LRU
+	blockedConnQueue = newBlpopQueue()
+	unblockConnQueue = datastructures.NewFifoQueue[UnblockConn]()
 )
 
 func main() {
@@ -32,6 +37,7 @@ func main() {
 	var wg sync.WaitGroup
 	go listenNewConnections(ctx, l, channel, &wg)
 
+	cleanBlockedConn := time.NewTicker(defaultCleanTime)
 	for {
 		select {
 		case <-ctx.Done():
@@ -43,7 +49,24 @@ func main() {
 				return
 			}
 
-			conn.Process()
+			if err := conn.Process(); err != nil {
+				logger.Error("error processing connection", err)
+			}
+
+			if err := blockedConnQueue.ProcessBlockedConn(); err != nil {
+				logger.Error("error processing blocked connections", err)
+			}
+
+		case <-cleanBlockedConn.C:
+			blockedConnQueue.clean()
+
+			nextTick := blockedConnQueue.nextExpiry()
+			if nextTick > 0 {
+				cleanBlockedConn.Reset(nextTick)
+			} else {
+				cleanBlockedConn.Reset(defaultCleanTime)
+			}
+
 		}
 	}
 }
@@ -64,8 +87,8 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 					c.Close()
 					return
 				default:
-					conn := NewConnection(c)
-					m, err := conn.reader.Peek(1)
+					conn := NewConnection(c, logger, memory)
+					m, err := conn.Peek(1)
 					if err != nil {
 						logger.Error("error reading data from client", err)
 						conn.Close()

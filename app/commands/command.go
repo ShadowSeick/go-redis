@@ -29,6 +29,7 @@ const (
 	CommandTypeLRange
 	CommandTypeLLen
 	CommandTypeLPop
+	CommandTypeBLPop
 	CommandTypeCount
 )
 
@@ -42,6 +43,7 @@ var commandTypeStrings = [CommandTypeCount]string{
 	CommandTypeLRange: "lrange",
 	CommandTypeLPop:   "lpop",
 	CommandTypeLLen:   "llen",
+	CommandTypeBLPop:  "blpop",
 }
 
 func (ct CommandType) String() string {
@@ -70,6 +72,8 @@ func New(name string) (Command, error) {
 				return &LLen{}, nil
 			case CommandTypeLPop:
 				return &LPop{}, nil
+			case CommandTypeBLPop:
+				return &BLPop{}, nil
 			}
 		}
 	}
@@ -379,4 +383,41 @@ func (lp *LPop) SetArgs(args ...any) {
 
 func (lp *LPop) Error() error {
 	return lp.err
+}
+
+type BLPop struct {
+	Keys    []string
+	Expiry  int
+	Unblock bool
+	err     error
+}
+
+func (blp *BLPop) String() string {
+	return CommandTypeBLPop.String()
+}
+
+func (blp *BLPop) SetArgs(args ...any) {
+	for _, v := range args {
+		switch t := v.(type) {
+		case []string:
+			if len(t) < 2 {
+				blp.err = ErrNotValidNumberOfArgs
+				return
+			}
+
+			blp.Keys = t[0 : len(t)-1]
+
+			timeout, err := strconv.Atoi(t[len(t)-1])
+			if err != nil {
+				blp.err = ErrNotValidArgType
+				blp.Expiry = timeout * 1_000
+			}
+		default:
+			blp.err = ErrTypeNotAllowed
+		}
+	}
+}
+
+func (blp *BLPop) Error() error {
+	return blp.err
 }

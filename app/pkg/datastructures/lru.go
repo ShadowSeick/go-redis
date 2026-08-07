@@ -10,7 +10,14 @@ var ErrNodeNotFound = errors.New("node not found")
 type LRU interface {
 	Get(key string) *any
 	Set(key string, value any, expirty int)
-	Clean()
+	Remove(key string) error
+	Clean() []CleanedNode
+	Len() int
+}
+
+type CleanedNode struct {
+	Key   string
+	Value any
 }
 
 type ExpiryLRU struct {
@@ -27,7 +34,7 @@ type Node struct {
 
 func NewExpiryLRU() *ExpiryLRU {
 	return &ExpiryLRU{
-		hash: make(map[string]*Node, 1000),
+		hash: make(map[string]*Node, 1024),
 	}
 }
 
@@ -38,7 +45,7 @@ func (elru *ExpiryLRU) Get(key string) *any {
 	}
 
 	if node.expiry != nil && time.Now().After(*node.expiry) {
-		elru.remove(key)
+		elru.Remove(key)
 		return nil
 	}
 
@@ -62,24 +69,29 @@ func (elru *ExpiryLRU) Set(key string, value any, expiry int) {
 	elru.moveToTop(node)
 }
 
-func (elru *ExpiryLRU) Clean() {
+func (elru *ExpiryLRU) Clean() []CleanedNode {
 	now := time.Now()
 
-	var expiredNodes []string
+	var cleanedNodes []CleanedNode
 	for key, node := range elru.hash {
-		if node.expiry.After(now) {
-			expiredNodes = append(expiredNodes, key)
+		if node.expiry != nil && node.expiry.After(now) {
+			cleanedNodes = append(cleanedNodes, CleanedNode{
+				Key:   key,
+				Value: node.value,
+			})
 		}
 	}
 
-	if len(expiredNodes) > 0 {
-		for _, key := range expiredNodes {
-			elru.remove(key)
+	if len(cleanedNodes) > 0 {
+		for _, node := range cleanedNodes {
+			elru.Remove(node.Key)
 		}
 	}
+
+	return cleanedNodes
 }
 
-func (elru *ExpiryLRU) remove(key string) error {
+func (elru *ExpiryLRU) Remove(key string) error {
 	node, ok := elru.hash[key]
 	if !ok {
 		return ErrNodeNotFound
@@ -89,6 +101,10 @@ func (elru *ExpiryLRU) remove(key string) error {
 	delete(elru.hash, key)
 
 	return nil
+}
+
+func (elru *ExpiryLRU) Len() int {
+	return len(elru.hash)
 }
 
 func (elru *ExpiryLRU) moveToTop(node *Node) {
