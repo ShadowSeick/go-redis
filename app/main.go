@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -14,6 +16,9 @@ import (
 const defaultCleanTime = 100 * time.Millisecond
 
 var (
+	// Flags
+	port int
+
 	logger           logging.Logger
 	memory           datastructures.LRU
 	blockedConnQueue = newBlpopQueue()
@@ -26,7 +31,10 @@ func main() {
 	logger = logging.NewStructuredLogger()
 	memory = datastructures.NewExpiryLRU()
 
-	l, err := config.Listen(ctx, "tcp", "0.0.0.0:6379")
+	flag.IntVar(&port, "port", 6379, "port where redis server TCP connection will bind")
+	flag.Parse()
+
+	l, err := config.Listen(ctx, "tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		logger.Error("failed to bind to port 6379", err)
 		os.Exit(1)
