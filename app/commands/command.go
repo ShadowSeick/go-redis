@@ -387,7 +387,7 @@ func (lp *LPop) Error() error {
 
 type BLPop struct {
 	Keys    []string
-	Expiry  int
+	Expiry  float64
 	Unblock bool
 	err     error
 }
@@ -407,11 +407,13 @@ func (blp *BLPop) SetArgs(args ...any) {
 
 			blp.Keys = t[0 : len(t)-1]
 
-			timeout, err := strconv.Atoi(t[len(t)-1])
+			timeout, err := strconv.ParseFloat(t[len(t)-1], 64)
 			if err != nil {
 				blp.err = ErrNotValidArgType
-				blp.Expiry = timeout * 1_000
+				return
 			}
+
+			blp.Expiry = timeout * 1_000
 		default:
 			blp.err = ErrTypeNotAllowed
 		}

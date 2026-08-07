@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"strconv"
@@ -58,10 +57,8 @@ func (c *Conn) WriteString(value []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
 		return fmt.Errorf("error writting string type, %w", err)
 	}
-	if !bytes.Equal(value, []byte(commands.NullString)) {
-		if err := c.WriteLength(len(value)); err != nil {
-			return fmt.Errorf("error writting string length, %w", err)
-		}
+	if err := c.WriteLength(len(value)); err != nil {
+		return fmt.Errorf("error writting string length, %w", err)
 	}
 	if err := c.writer.WriteReply(value); err != nil {
 		return fmt.Errorf("error writting string reply, %w", err)
@@ -90,6 +87,16 @@ func (c *Conn) WriteArray(values []string) error {
 		if err := c.WriteString([]byte(val)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (c *Conn) WriteNull(respType byte) error {
+	if err := c.writer.WriteType(respType); err != nil {
+		return fmt.Errorf("error writting array type, %w", err)
+	}
+	if err := c.writer.WriteReply([]byte(commands.NullString)); err != nil {
+		return fmt.Errorf("error writting string reply, %w", err)
 	}
 	return nil
 }

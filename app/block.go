@@ -117,10 +117,6 @@ func (q *blpopQueue) clean() {
 	for _, node := range blpopEvents {
 		switch v := node.Value.(type) {
 		case blockConn:
-			if err := q.cleanBlocked(v); err != nil {
-				panic(err.Error())
-			}
-
 			if err := v.conn.ProcessCommand(&commands.BLPop{
 				Keys:    v.keys,
 				Unblock: true,
@@ -128,6 +124,10 @@ func (q *blpopQueue) clean() {
 				panic(err.Error())
 			}
 			v.conn.Flush()
+
+			if err := q.cleanBlocked(v); err != nil {
+				panic(err.Error())
+			}
 		default:
 			panic("invalid event")
 		}

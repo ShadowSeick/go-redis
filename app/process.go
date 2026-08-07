@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
+	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 func (c *Conn) Process() error {
@@ -82,7 +83,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		res := []byte(commands.NullString)
+		var res []byte
 		val := memory.Get(cmd.Key)
 		if val != nil {
 			switch v := (*val).(type) {
@@ -93,7 +94,11 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			}
 		}
 
-		return c.WriteString(res)
+		if len(res) == 0 {
+			return c.WriteNull(resp.RespTypeString)
+		} else {
+			return c.WriteString(res)
+		}
 	case *commands.RPush:
 		if err := cmd.Error(); err != nil {
 			return err
@@ -220,10 +225,12 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			res = append(res, commands.NullString)
 		}
 
-		if len(res) > 1 {
-			return c.WriteArray(res)
-		} else {
+		if len(res) == 0 {
+			return c.WriteNull(resp.RespTypeString)
+		} else if len(res) == 1 {
 			return c.WriteString([]byte(res[0]))
+		} else {
+			return c.WriteArray(res)
 		}
 
 	case *commands.BLPop:
@@ -231,9 +238,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		if !cmd.Unblock {
-			blockedConnQueue.Push(blockConn{keys: cmd.Keys, expiry: cmd.Expiry, conn: c})
-		} else {
+		if cmd.Unblock {
 			list := memory.Get(cmd.Keys[0])
 			res := []string{cmd.Keys[0]}
 			if list != nil {
@@ -251,9 +256,11 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			if len(res) > 1 {
 				return c.WriteArray(res)
 			} else {
-				return c.WriteString([]byte(commands.NullString))
+				return c.WriteNull(resp.RespTypeArray)
 			}
 		}
+
+		blockedConnQueue.Push(blockConn{keys: cmd.Keys, expiry: int(cmd.Expiry), conn: c})
 		return nil
 	default:
 		return fmt.Errorf("command not implemented")

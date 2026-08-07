@@ -63,7 +63,7 @@ func (q *fifoQueue[T]) Remove(elem T) bool {
 		return false
 	}
 
-	q.values = append(q.values[0:idx], q.values[idx+1:len(q.values)-1]...)
+	q.values = append(q.values[0:idx], q.values[idx+1:len(q.values)]...)
 	return true
 }
 

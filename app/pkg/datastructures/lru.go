@@ -74,7 +74,7 @@ func (elru *ExpiryLRU) Clean() []CleanedNode {
 
 	var cleanedNodes []CleanedNode
 	for key, node := range elru.hash {
-		if node.expiry != nil && node.expiry.After(now) {
+		if node.expiry != nil && now.After(*node.expiry) {
 			cleanedNodes = append(cleanedNodes, CleanedNode{
 				Key:   key,
 				Value: node.value,
