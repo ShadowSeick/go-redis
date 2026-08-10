@@ -1,0 +1,14 @@
+# One command per line. Blank lines and # comments are skipped.
+PING
+ECHO hello-world
+SET mykey somevalue
+GET mykey
+SET expiring temp PX 5000
+GET expiring
+RPUSH mylist a b c d e
+LPUSH mylist x y z
+LLEN mylist
+LRANGE mylist 0 -1
+LPOP mylist
+LPOP mylist 2
+GET missing-key
