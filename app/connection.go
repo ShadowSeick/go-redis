@@ -53,6 +53,16 @@ func (c *Conn) WriteStatus(status []byte) error {
 	return nil
 }
 
+func (c *Conn) WriteError(msg []byte) error {
+	if err := c.writer.WriteType(resp.RespTypeError); err != nil {
+		return fmt.Errorf("error writting error type, %w", err)
+	}
+	if err := c.writer.WriteReply(msg); err != nil {
+		return fmt.Errorf("error writting error reply, %w", err)
+	}
+	return nil
+}
+
 func (c *Conn) WriteString(value []byte) error {
 	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
 		return fmt.Errorf("error writting string type, %w", err)

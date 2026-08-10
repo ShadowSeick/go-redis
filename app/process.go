@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ func (c *Conn) Process() error {
 		cmd := strings.ToLower(v)
 		command, err := commands.New(cmd)
 		if err != nil {
-			return fmt.Errorf("error parsing string: %w", err)
+			return c.replyUnknownCommand(cmd, err)
 		}
 		cmds = append(cmds, command)
 	case []any: // Multiple command.
@@ -38,7 +39,7 @@ func (c *Conn) Process() error {
 		cmd := strings.ToLower(vals[0])
 		command, err := commands.New(cmd)
 		if err != nil {
-			return fmt.Errorf("error parsing array string: %w", err)
+			return c.replyUnknownCommand(cmd, err)
 		}
 		command.SetArgs(vals[1:])
 		cmds = append(cmds, command)
@@ -48,6 +49,16 @@ func (c *Conn) Process() error {
 
 	if err := c.processCommands(cmds); err != nil {
 		return fmt.Errorf("error processing commands: %w", err)
+	}
+	return c.Flush()
+}
+
+func (c *Conn) replyUnknownCommand(cmd string, err error) error {
+	if !errors.Is(err, commands.ErrNotValidCommand) {
+		return fmt.Errorf("error parsing command: %w", err)
+	}
+	if err := c.WriteError([]byte(fmt.Sprintf("ERR unknown command '%s'", cmd))); err != nil {
+		return err
 	}
 	return c.Flush()
 }

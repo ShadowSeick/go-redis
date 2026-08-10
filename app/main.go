@@ -4,7 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"sync"
 	"time"
@@ -17,7 +20,7 @@ const defaultCleanTime = 100 * time.Millisecond
 
 var (
 	// Flags
-	port int
+	port = flag.Int("port", 6379, "port where TCP connection will bind")
 
 	logger           logging.Logger
 	memory           datastructures.LRU
@@ -31,10 +34,14 @@ func main() {
 	logger = logging.NewStructuredLogger()
 	memory = datastructures.NewExpiryLRU()
 
-	flag.IntVar(&port, "port", 6379, "port where redis server TCP connection will bind")
 	flag.Parse()
 
-	l, err := config.Listen(ctx, "tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	// Profile
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
+	l, err := config.Listen(ctx, "tcp", fmt.Sprintf("0.0.0.0:%d", *port))
 	if err != nil {
 		logger.Error("failed to bind to port 6379", err)
 		os.Exit(1)

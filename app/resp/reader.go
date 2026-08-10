@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"strconv"
+
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/util"
 )
 
 var (
@@ -66,7 +68,7 @@ func (r *Reader) ReadReply() (any, error) {
 
 	switch line[0] {
 	case RespTypeStatus:
-		return string(line[1:]), nil
+		return util.ByteToString(line[1:]), nil
 	case RespTypeString:
 		return r.readString(line)
 	case RespTypeArray:
@@ -106,7 +108,7 @@ func (r *Reader) readString(line []byte) (string, error) {
 		return "", errors.New("the actual string was shorter than expected")
 	}
 
-	return string(str[:len(str)-len(crlf)]), nil
+	return util.ByteToString(str[:len(str)-len(crlf)]), nil
 }
 
 func (r *Reader) readArray(line []byte) ([]any, error) {
@@ -128,7 +130,7 @@ func (r *Reader) readArray(line []byte) ([]any, error) {
 }
 
 func readLen(line []byte) (int, error) {
-	n, err := strconv.Atoi(string(line[1:]))
+	n, err := strconv.Atoi(util.ByteToString(line[1:]))
 	if err != nil {
 		return 0, err
 	}

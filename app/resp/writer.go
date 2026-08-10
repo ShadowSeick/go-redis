@@ -15,7 +15,7 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
-// This needs to be changed. I don't like the way I am delegating this into the caller of the writer
+// I need to do it another way. I need to, again, "copy" the go-redis ways implementation. Take a long look at how Writer is implemented there
 func (w Writer) WriteType(reply byte) error {
 	return w.wt.WriteByte(reply)
 }
