@@ -102,7 +102,7 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 					c.Close()
 					return
 				default:
-					conn := NewConnection(c, logger, memory)
+					conn := NewConnection(c, memory)
 					m, err := conn.Peek(1)
 					if err != nil {
 						logger.Error("error reading data from client", err)

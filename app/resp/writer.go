@@ -2,26 +2,62 @@ package resp
 
 import (
 	"bufio"
+	"errors"
 	"io"
+	"strconv"
+
+	"github.com/codecrafters-io/redis-starter-go/app/pkg/util"
 )
 
+var ErrTypeNotImplemented = errors.New("type not implemented")
+
+const numBuffSize = 11 // 8 bytes + 3 bytes for integer type and crlf.
+
 type Writer struct {
-	wt *bufio.Writer
+	wt      *bufio.Writer
+	numBuff []byte
 }
 
 func NewWriter(w io.Writer) *Writer {
 	return &Writer{
-		wt: bufio.NewWriterSize(w, DefaultBufferSize),
+		wt:      bufio.NewWriterSize(w, DefaultBufferSize),
+		numBuff: make([]byte, 0, numBuffSize),
 	}
 }
 
-// I need to do it another way. I need to, again, "copy" the go-redis ways implementation. Take a long look at how Writer is implemented there
-func (w Writer) WriteType(reply byte) error {
-	return w.wt.WriteByte(reply)
+func (w Writer) Flush() error {
+	return w.wt.Flush()
 }
 
-func (w Writer) WriteReply(reply []byte) error {
-	if _, err := w.wt.Write(reply); err != nil {
+func (w Writer) Write(reply any) (err error) {
+	switch v := reply.(type) {
+	case byte:
+		err = w.wt.WriteByte(v)
+	case []byte:
+		_, err = w.wt.Write(v)
+	case rune:
+		_, err = w.wt.WriteRune(v)
+	case string:
+		err = w.string(v)
+	case int:
+		err = w.integer(v)
+	default:
+		err = ErrTypeNotImplemented
+	}
+	return err
+}
+
+func (w Writer) string(s string) error {
+	b := util.StringToByte(s)
+	if _, err := w.wt.Write(b); err != nil {
+		return err
+	}
+	return w.crlf()
+}
+
+func (w Writer) integer(n int) error {
+	b := strconv.AppendInt(w.numBuff[:0], int64(n), 10)
+	if _, err := w.wt.Write(b); err != nil {
 		return err
 	}
 	return w.crlf()
@@ -34,8 +70,4 @@ func (w Writer) crlf() error {
 	}
 
 	return nil
-}
-
-func (w Writer) Flush() error {
-	return w.wt.Flush()
 }

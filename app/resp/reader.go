@@ -35,7 +35,7 @@ const (
 
 var crlf = []byte{'\r', '\n'}
 
-// DefaultBufferSize is the default size for read/write buffers (32 KiB).
+// DefaultBufferSize is the default size for read/write buffers (64 KiB).
 const DefaultBufferSize = 32 * 1024
 
 type Reader struct {

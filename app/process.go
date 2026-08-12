@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
@@ -57,7 +56,7 @@ func (c *Conn) replyUnknownCommand(cmd string, err error) error {
 	if !errors.Is(err, commands.ErrNotValidCommand) {
 		return fmt.Errorf("error parsing command: %w", err)
 	}
-	if err := c.WriteError([]byte(fmt.Sprintf("ERR unknown command '%s'", cmd))); err != nil {
+	if err := c.WriteError(fmt.Sprintf("ERR unknown command '%s'", cmd)); err != nil {
 		return err
 	}
 	return c.Flush()
@@ -76,30 +75,30 @@ func (c *Conn) processCommands(cmds []commands.Command) error {
 func (c *Conn) ProcessCommand(command commands.Command) error {
 	switch cmd := command.(type) {
 	case commands.Ping:
-		return c.WriteStatus([]byte("PONG"))
+		return c.WriteStatus("PONG")
 	case *commands.Echo:
 		if err := cmd.Error(); err != nil {
 			return err
 		}
-		return c.WriteString([]byte(cmd.Val))
+		return c.WriteString(cmd.Val)
 	case *commands.Set:
 		if err := cmd.Error(); err != nil {
 			return err
 		}
 
 		memory.Set(cmd.Key, cmd.Value, cmd.Expiry)
-		return c.WriteStatus([]byte("OK"))
+		return c.WriteStatus("OK")
 	case *commands.Get:
 		if err := cmd.Error(); err != nil {
 			return err
 		}
 
-		var res []byte
+		var res string
 		val := memory.Get(cmd.Key)
 		if val != nil {
 			switch v := (*val).(type) {
 			case string:
-				res = []byte(v)
+				res = v
 			default:
 				return fmt.Errorf("error getting value from memory, %w", commands.ErrTypeNotAllowed)
 			}
@@ -131,7 +130,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 
 		unblockConnQueue.Push(UnblockConn{Key: cmd.Key, events: len(cmd.Elements)})
 		res += len(cmd.Elements)
-		return c.WriteInteger([]byte(strconv.Itoa(res)))
+		return c.WriteInteger(res)
 	case *commands.LPush:
 		if err := cmd.Error(); err != nil {
 			return err
@@ -153,7 +152,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 
 		unblockConnQueue.Push(UnblockConn{Key: cmd.Key, events: len(cmd.Elements)})
 		res += len(cmd.Elements)
-		return c.WriteInteger([]byte(strconv.Itoa(res)))
+		return c.WriteInteger(res)
 	case *commands.LRange:
 		if err := cmd.Error(); err != nil {
 			return err
@@ -206,7 +205,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			}
 		}
 
-		return c.WriteInteger([]byte(strconv.Itoa(res)))
+		return c.WriteInteger(res)
 	case *commands.LPop:
 		if err := cmd.Error(); err != nil {
 			return err
@@ -239,7 +238,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 		if len(res) == 0 {
 			return c.WriteNull(resp.RespTypeString)
 		} else if len(res) == 1 {
-			return c.WriteString([]byte(res[0]))
+			return c.WriteString(res[0])
 		} else {
 			return c.WriteArray(res)
 		}

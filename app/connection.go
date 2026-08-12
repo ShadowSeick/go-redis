@@ -3,25 +3,21 @@ package main
 import (
 	"fmt"
 	"net"
-	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
-	"github.com/codecrafters-io/redis-starter-go/app/pkg/logging"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 type Conn struct {
 	conn   net.Conn
-	logger logging.Logger
 	reader *resp.Reader
 	writer *resp.Writer
 }
 
-func NewConnection(conn net.Conn, logger logging.Logger, memory datastructures.LRU) *Conn {
+func NewConnection(conn net.Conn, memory datastructures.LRU) *Conn {
 	return &Conn{
 		conn:   conn,
-		logger: logger,
 		reader: resp.NewReader(conn),
 		writer: resp.NewWriter(conn),
 	}
@@ -43,58 +39,58 @@ func (c *Conn) Flush() error {
 	return c.writer.Flush()
 }
 
-func (c *Conn) WriteStatus(status []byte) error {
-	if err := c.writer.WriteType(resp.RespTypeStatus); err != nil {
-		return fmt.Errorf("error writting status type")
+func (c *Conn) WriteStatus(status string) error {
+	if err := c.writer.Write(resp.RespTypeStatus); err != nil {
+		return fmt.Errorf("error writting status type, %w", err)
 	}
-	if err := c.writer.WriteReply(status); err != nil {
+	if err := c.writer.Write(status); err != nil {
 		return fmt.Errorf("error writting status reply, %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) WriteError(msg []byte) error {
-	if err := c.writer.WriteType(resp.RespTypeError); err != nil {
+func (c *Conn) WriteError(msg string) error {
+	if err := c.writer.Write(resp.RespTypeError); err != nil {
 		return fmt.Errorf("error writting error type, %w", err)
 	}
-	if err := c.writer.WriteReply(msg); err != nil {
+	if err := c.writer.Write(msg); err != nil {
 		return fmt.Errorf("error writting error reply, %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) WriteString(value []byte) error {
-	if err := c.writer.WriteType(resp.RespTypeString); err != nil {
+func (c *Conn) WriteString(value string) error {
+	if err := c.writer.Write(resp.RespTypeString); err != nil {
 		return fmt.Errorf("error writting string type, %w", err)
 	}
 	if err := c.WriteLength(len(value)); err != nil {
 		return fmt.Errorf("error writting string length, %w", err)
 	}
-	if err := c.writer.WriteReply(value); err != nil {
+	if err := c.writer.Write(value); err != nil {
 		return fmt.Errorf("error writting string reply, %w", err)
 	}
 	return nil
 }
 
-func (c *Conn) WriteInteger(value []byte) error {
-	if err := c.writer.WriteType(resp.RespTypeInt); err != nil {
+func (c *Conn) WriteInteger(value int) error {
+	if err := c.writer.Write(resp.RespTypeInt); err != nil {
 		return fmt.Errorf("error writting int type, %w", err)
 	}
-	if err := c.writer.WriteReply([]byte(value)); err != nil {
+	if err := c.writer.Write(value); err != nil {
 		return fmt.Errorf("error writting int reply, %w", err)
 	}
 	return nil
 }
 
 func (c *Conn) WriteArray(values []string) error {
-	if err := c.writer.WriteType(resp.RespTypeArray); err != nil {
+	if err := c.writer.Write(resp.RespTypeArray); err != nil {
 		return fmt.Errorf("error writting array type, %w", err)
 	}
-	if err := c.WriteLength(len(values)); err != nil {
+	if err := c.writer.Write(len(values)); err != nil {
 		return fmt.Errorf("error writting array length, %w", err)
 	}
 	for _, val := range values {
-		if err := c.WriteString([]byte(val)); err != nil {
+		if err := c.WriteString(val); err != nil {
 			return err
 		}
 	}
@@ -102,18 +98,17 @@ func (c *Conn) WriteArray(values []string) error {
 }
 
 func (c *Conn) WriteNull(respType byte) error {
-	if err := c.writer.WriteType(respType); err != nil {
+	if err := c.writer.Write(respType); err != nil {
 		return fmt.Errorf("error writting array type, %w", err)
 	}
-	if err := c.writer.WriteReply([]byte(commands.NullString)); err != nil {
+	if err := c.writer.Write(commands.NullString); err != nil {
 		return fmt.Errorf("error writting string reply, %w", err)
 	}
 	return nil
 }
 
 func (c *Conn) WriteLength(length int) error {
-	val := strconv.Itoa(length)
-	if err := c.writer.WriteReply([]byte(val)); err != nil {
+	if err := c.writer.Write(length); err != nil {
 		return err
 	}
 	return nil
