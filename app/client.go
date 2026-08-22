@@ -9,39 +9,47 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
-type Conn struct {
+type Client struct {
 	conn   net.Conn
+	memory datastructures.LRU
 	reader *resp.Reader
 	writer *resp.Writer
 }
 
-func NewConnection(conn net.Conn, memory datastructures.LRU) *Conn {
-	return &Conn{
-		conn:   conn,
-		reader: resp.NewReader(conn),
-		writer: resp.NewWriter(conn),
+func (c *Client) Reset(conn net.Conn) {
+	c.conn = conn
+	if c.reader != nil {
+		c.reader.Reset(conn)
+	} else {
+		c.reader = resp.NewReader(conn)
+	}
+
+	if c.writer != nil {
+		c.writer.Reset(conn)
+	} else {
+		c.writer = resp.NewWriter(conn)
 	}
 }
 
-func (c *Conn) Peek(n int) ([]byte, error) {
+func (c *Client) Peek(n int) ([]byte, error) {
 	return c.reader.Peek(n)
 }
 
-func (c *Conn) Close() {
+func (c *Client) Close() {
 	c.conn.Close()
 }
 
-func (c *Conn) ReadReply() (any, error) {
+func (c *Client) ReadReply() (any, error) {
 	return c.reader.ReadReply()
 }
 
-func (c *Conn) Flush() error {
+func (c *Client) Flush() error {
 	return c.writer.Flush()
 }
 
-func (c *Conn) WriteStatus(status string) error {
+func (c *Client) WriteStatus(status string) error {
 	if err := c.writer.Write(resp.RespTypeStatus); err != nil {
-		return fmt.Errorf("error writting status type, %w", err)
+		return fmt.Errorf("error writting status type")
 	}
 	if err := c.writer.Write(status); err != nil {
 		return fmt.Errorf("error writting status reply, %w", err)
@@ -49,7 +57,7 @@ func (c *Conn) WriteStatus(status string) error {
 	return nil
 }
 
-func (c *Conn) WriteError(msg string) error {
+func (c *Client) WriteError(msg string) error {
 	if err := c.writer.Write(resp.RespTypeError); err != nil {
 		return fmt.Errorf("error writting error type, %w", err)
 	}
@@ -59,11 +67,11 @@ func (c *Conn) WriteError(msg string) error {
 	return nil
 }
 
-func (c *Conn) WriteString(value string) error {
+func (c *Client) WriteString(value string) error {
 	if err := c.writer.Write(resp.RespTypeString); err != nil {
 		return fmt.Errorf("error writting string type, %w", err)
 	}
-	if err := c.WriteLength(len(value)); err != nil {
+	if err := c.writer.Write(len(value)); err != nil {
 		return fmt.Errorf("error writting string length, %w", err)
 	}
 	if err := c.writer.Write(value); err != nil {
@@ -72,7 +80,7 @@ func (c *Conn) WriteString(value string) error {
 	return nil
 }
 
-func (c *Conn) WriteInteger(value int) error {
+func (c *Client) WriteInteger(value int) error {
 	if err := c.writer.Write(resp.RespTypeInt); err != nil {
 		return fmt.Errorf("error writting int type, %w", err)
 	}
@@ -82,7 +90,7 @@ func (c *Conn) WriteInteger(value int) error {
 	return nil
 }
 
-func (c *Conn) WriteArray(values []string) error {
+func (c *Client) WriteArray(values []string) error {
 	if err := c.writer.Write(resp.RespTypeArray); err != nil {
 		return fmt.Errorf("error writting array type, %w", err)
 	}
@@ -90,26 +98,19 @@ func (c *Conn) WriteArray(values []string) error {
 		return fmt.Errorf("error writting array length, %w", err)
 	}
 	for _, val := range values {
-		if err := c.WriteString(val); err != nil {
+		if err := c.writer.Write(val); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Conn) WriteNull(respType byte) error {
+func (c *Client) WriteNull(respType byte) error {
 	if err := c.writer.Write(respType); err != nil {
 		return fmt.Errorf("error writting array type, %w", err)
 	}
 	if err := c.writer.Write(commands.NullString); err != nil {
 		return fmt.Errorf("error writting string reply, %w", err)
-	}
-	return nil
-}
-
-func (c *Conn) WriteLength(length int) error {
-	if err := c.writer.Write(length); err != nil {
-		return err
 	}
 	return nil
 }

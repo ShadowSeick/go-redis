@@ -9,7 +9,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
-func (c *Conn) Process() error {
+func (c *Client) Process() error {
 	reply, err := c.ReadReply()
 	if err != nil {
 		return fmt.Errorf("error reading client reply: %w", err)
@@ -52,7 +52,7 @@ func (c *Conn) Process() error {
 	return c.Flush()
 }
 
-func (c *Conn) replyUnknownCommand(cmd string, err error) error {
+func (c *Client) replyUnknownCommand(cmd string, err error) error {
 	if !errors.Is(err, commands.ErrNotValidCommand) {
 		return fmt.Errorf("error parsing command: %w", err)
 	}
@@ -62,9 +62,22 @@ func (c *Conn) replyUnknownCommand(cmd string, err error) error {
 	return c.Flush()
 }
 
-func (c *Conn) processCommands(cmds []commands.Command) error {
+func (c *Client) processBlockConn(blocked []blockConn) error {
+	for _, block := range blocked {
+		c.Reset(block.conn)
+		if err := c.processCommand(&commands.LPop{Key: block.keys[0]}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) processCommands(cmds []commands.Command) error {
 	for _, cmd := range cmds {
-		if err := c.ProcessCommand(cmd); err != nil {
+		if err := c.processCommand(cmd); err != nil {
+			if wErr := c.WriteError(fmt.Sprintf("error proccessing command: %s", cmd.String())); wErr != nil {
+				return wErr
+			}
 			return fmt.Errorf("error processing command, %s: %w", cmd.String(), err)
 		}
 	}
@@ -72,7 +85,7 @@ func (c *Conn) processCommands(cmds []commands.Command) error {
 	return nil
 }
 
-func (c *Conn) ProcessCommand(command commands.Command) error {
+func (c *Client) processCommand(command commands.Command) error {
 	switch cmd := command.(type) {
 	case commands.Ping:
 		return c.WriteStatus("PONG")
@@ -86,7 +99,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		memory.Set(cmd.Key, cmd.Value, cmd.Expiry)
+		c.memory.Set(cmd.Key, cmd.Value, cmd.Expiry)
 		return c.WriteStatus("OK")
 	case *commands.Get:
 		if err := cmd.Error(); err != nil {
@@ -94,7 +107,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 		}
 
 		var res string
-		val := memory.Get(cmd.Key)
+		val := c.memory.Get(cmd.Key)
 		if val != nil {
 			switch v := (*val).(type) {
 			case string:
@@ -115,9 +128,9 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 		}
 
 		var res int
-		list := memory.Get(cmd.Key)
+		list := c.memory.Get(cmd.Key)
 		if list == nil {
-			memory.Set(cmd.Key, cmd.Elements, 0)
+			c.memory.Set(cmd.Key, cmd.Elements, 0)
 		} else {
 			switch t := (*list).(type) {
 			case []string:
@@ -137,9 +150,9 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 		}
 
 		var res int
-		list := memory.Get(cmd.Key)
+		list := c.memory.Get(cmd.Key)
 		if list == nil {
-			memory.Set(cmd.Key, cmd.Elements, 0)
+			c.memory.Set(cmd.Key, cmd.Elements, 0)
 		} else {
 			switch t := (*list).(type) {
 			case []string:
@@ -158,7 +171,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		list := memory.Get(cmd.Key)
+		list := c.memory.Get(cmd.Key)
 		var res []string
 		if list != nil {
 			switch t := (*list).(type) {
@@ -194,7 +207,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		list := memory.Get(cmd.Key)
+		list := c.memory.Get(cmd.Key)
 		var res int
 		if list != nil {
 			switch t := (*list).(type) {
@@ -211,7 +224,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			return err
 		}
 
-		list := memory.Get(cmd.Key)
+		list := c.memory.Get(cmd.Key)
 		var res []string
 		if list != nil {
 			switch t := (*list).(type) {
@@ -249,7 +262,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 		}
 
 		if cmd.Unblock {
-			list := memory.Get(cmd.Keys[0])
+			list := c.memory.Get(cmd.Keys[0])
 			res := []string{cmd.Keys[0]}
 			if list != nil {
 				switch t := (*list).(type) {
@@ -270,7 +283,7 @@ func (c *Conn) ProcessCommand(command commands.Command) error {
 			}
 		}
 
-		blockedConnQueue.Push(blockConn{keys: cmd.Keys, expiry: int(cmd.Expiry), conn: c})
+		blockedConnQueue.Push(blockConn{keys: cmd.Keys, expiry: int(cmd.Expiry), conn: c.conn})
 		return nil
 	default:
 		return fmt.Errorf("command not implemented")

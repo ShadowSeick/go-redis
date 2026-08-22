@@ -2,19 +2,19 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
 )
 
 type blockConn struct {
 	keys   []string
 	expiry int
-	conn   *Conn
+	conn   net.Conn
 }
 
 func (bc blockConn) ID() string {
@@ -25,8 +25,8 @@ func (bc blockConn) ID() string {
 	builder.WriteString(strconv.Itoa(bc.expiry))
 	// This should be unique for the connection.
 	// For now it will work, but maybe it's a good idea to add a unique ID
-	builder.WriteString(bc.conn.conn.LocalAddr().String())
-	builder.WriteString(bc.conn.conn.RemoteAddr().String())
+	builder.WriteString(bc.conn.LocalAddr().String())
+	builder.WriteString(bc.conn.RemoteAddr().String())
 	return builder.String()
 }
 
@@ -56,30 +56,31 @@ func newBlpopQueue() *blpopQueue {
 	}
 }
 
-func (q *blpopQueue) process(unblock UnblockConn) (blockConn, error) {
-	var val blockConn
+func (q *blpopQueue) process(unblock UnblockConn) ([]blockConn, error) {
+	var blockConns []blockConn
 
 	queue, ok := q.keysEvents[unblock.Key]
 	if !ok {
-		return val, fmt.Errorf("no events for key: %s", unblock.Key)
+		return nil, fmt.Errorf("no events for key: %s", unblock.Key)
 	}
 
 	for i := 0; i < unblock.events; i++ {
 		block, err := queue.Pop()
 		if err != nil {
-			return val, err
+			return nil, err
 		}
 
-		if err := block.conn.ProcessCommand(&commands.BLPop{
-			Keys:    []string{unblock.Key},
-			Unblock: true,
-		}); err != nil {
-			return val, err
+		blockConns = append(blockConns, blockConn{
+			keys: []string{unblock.Key},
+			conn: block.conn,
+		})
+
+		if err := q.cleanBlocked(block); err != nil {
+			return nil, err
 		}
-		block.conn.Flush()
 	}
 
-	return val, nil
+	return blockConns, nil
 }
 
 func (q *blpopQueue) Push(block blockConn) {
@@ -108,30 +109,25 @@ func (q *blpopQueue) Push(block blockConn) {
 	}
 }
 
-func (q *blpopQueue) clean() {
+func (q *blpopQueue) clean() ([]blockConn, error) {
 	blpopEvents := q.events.Clean()
 	if len(blpopEvents) == 0 {
-		return
+		return nil, nil
 	}
 
+	var blocked []blockConn
 	for _, node := range blpopEvents {
 		switch v := node.Value.(type) {
 		case blockConn:
-			if err := v.conn.ProcessCommand(&commands.BLPop{
-				Keys:    v.keys,
-				Unblock: true,
-			}); err != nil {
-				panic(err.Error())
-			}
-			v.conn.Flush()
-
+			blocked = append(blocked, v)
 			if err := q.cleanBlocked(v); err != nil {
-				panic(err.Error())
+				return nil, err
 			}
 		default:
-			panic("invalid event")
+			return nil, fmt.Errorf("invalid blocked event")
 		}
 	}
+	return blocked, nil
 }
 
 func (q *blpopQueue) nextExpiry() time.Duration {
@@ -156,7 +152,8 @@ func (q *blpopQueue) cleanBlocked(block blockConn) error {
 	return nil
 }
 
-func (q *blpopQueue) ProcessBlockedConn() error {
+func (q *blpopQueue) getUnblockedConn() ([]blockConn, error) {
+	var blockConns []blockConn
 	for i := 0; i < unblockConnQueue.Len(); i++ {
 		if q.events.Len() == 0 {
 			unblockConnQueue.Clean()
@@ -165,16 +162,16 @@ func (q *blpopQueue) ProcessBlockedConn() error {
 
 		unblock, err := unblockConnQueue.Pop()
 		if err != nil {
-			return fmt.Errorf("error popping queue: %w", err)
+			return nil, fmt.Errorf("error popping queue: %w", err)
 		}
 
 		blocked, err := q.process(unblock)
 		if err != nil {
-			return fmt.Errorf("error processing unblock connection: %w", err)
+			return nil, fmt.Errorf("error processing unblock connection: %w", err)
 		}
 
-		q.cleanBlocked(blocked)
+		blockConns = append(blockConns, blocked...)
 	}
 
-	return nil
+	return blockConns, nil
 }

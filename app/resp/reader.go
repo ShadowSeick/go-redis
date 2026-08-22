@@ -35,7 +35,7 @@ const (
 
 var crlf = []byte{'\r', '\n'}
 
-// DefaultBufferSize is the default size for read/write buffers (64 KiB).
+// DefaultBufferSize is the default size for read/write buffers (32 KiB).
 const DefaultBufferSize = 32 * 1024
 
 type Reader struct {
@@ -46,6 +46,10 @@ func NewReader(rd io.Reader) *Reader {
 	return &Reader{
 		rd: bufio.NewReaderSize(rd, DefaultBufferSize),
 	}
+}
+
+func (r *Reader) Reset(rd io.Reader) {
+	r.rd.Reset(rd)
 }
 
 func (r *Reader) Buffered() int {

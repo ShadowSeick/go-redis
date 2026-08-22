@@ -25,6 +25,10 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
+func (w Writer) Reset(wt io.Writer) {
+	w.wt.Reset(wt)
+}
+
 func (w Writer) Flush() error {
 	return w.wt.Flush()
 }

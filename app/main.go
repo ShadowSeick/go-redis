@@ -9,7 +9,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/pkg/datastructures"
@@ -32,7 +31,6 @@ func main() {
 	config := net.ListenConfig{}
 	ctx := context.Background()
 	logger = logging.NewStructuredLogger()
-	memory = datastructures.NewExpiryLRU()
 
 	flag.Parse()
 
@@ -48,45 +46,9 @@ func main() {
 	}
 	logger.Info("TCP connection opened in port 6379")
 
-	channel := make(chan *Conn)
-	var wg sync.WaitGroup
-	go listenNewConnections(ctx, l, channel, &wg)
-
+	memory = datastructures.NewExpiryLRU()
+	client := Client{memory: memory}
 	cleanBlockedConn := time.NewTicker(defaultCleanTime)
-	for {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			close(channel)
-			return
-		case conn, ok := <-channel:
-			if !ok {
-				return
-			}
-
-			if err := conn.Process(); err != nil {
-				logger.Error("error processing connection", err)
-			}
-
-			if err := blockedConnQueue.ProcessBlockedConn(); err != nil {
-				logger.Error("error processing blocked connections", err)
-			}
-
-		case <-cleanBlockedConn.C:
-			blockedConnQueue.clean()
-
-			nextTick := blockedConnQueue.nextExpiry()
-			if nextTick > 0 {
-				cleanBlockedConn.Reset(nextTick)
-			} else {
-				cleanBlockedConn.Reset(defaultCleanTime)
-			}
-
-		}
-	}
-}
-
-func listenNewConnections(ctx context.Context, l net.Listener, clientChannel chan *Conn, wg *sync.WaitGroup) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -95,28 +57,54 @@ func listenNewConnections(ctx context.Context, l net.Listener, clientChannel cha
 		}
 		logger.Info("accepted connection from", "connection", c.RemoteAddr())
 
-		wg.Go(func() {
-			for {
-				select {
-				case <-ctx.Done():
-					c.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				c.Close()
+				return
+			case <-cleanBlockedConn.C:
+				blocked, err := blockedConnQueue.clean()
+				if err != nil {
+					logger.Error("error cleaning blocked connections", err)
+					continue
+				}
+
+				if err = client.processBlockConn(blocked); err != nil {
+					logger.Error("error processing blocked connections", err)
+				}
+
+				nextTick := blockedConnQueue.nextExpiry()
+				if nextTick > 0 {
+					cleanBlockedConn.Reset(nextTick)
+				} else {
+					cleanBlockedConn.Reset(defaultCleanTime)
+				}
+			default:
+				client.Reset(c)
+				m, err := client.Peek(1)
+				if err != nil {
+					logger.Error("error reading data from client", err)
+					client.Close()
 					return
-				default:
-					conn := NewConnection(c, memory)
-					m, err := conn.Peek(1)
-					if err != nil {
-						logger.Error("error reading data from client", err)
-						conn.Close()
-						return
-					}
+				}
 
-					if len(m) == 0 {
-						continue
-					}
+				if len(m) == 0 {
+					continue
+				}
 
-					clientChannel <- conn
+				if err = client.Process(); err != nil {
+					logger.Error("error processing connection", err)
+				}
+
+				blocked, err := blockedConnQueue.getUnblockedConn()
+				if err != nil {
+					logger.Error("error getting unblocked connections", err)
+				}
+
+				if err = client.processBlockConn(blocked); err != nil {
+					logger.Error("error processing blocked connections", err)
 				}
 			}
-		})
+		}
 	}
 }
